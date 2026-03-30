@@ -1017,18 +1017,22 @@ function renderLocationList() {
 
       return `
                 <div class="stlp__location-card">
-                    <div class="stlp__location-top">
-                        <div>
+                    <div class="stlp__location-row">
+                        <div class="stlp__location-summary">
                             <div class="stlp__location-name">${escapeHtml(location.name)}</div>
-                            <div class="stlp__location-id">${escapeHtml(location.id)}</div>
+                            <div class="stlp__location-meta-row">
+                                <span class="stlp__location-id">${escapeHtml(location.id)}</span>
+                                <span class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</span>
+                                <span class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</span>
+                            </div>
                         </div>
-                        ${activeId === location.id ? '<span class="stlp__badge">Active Scene</span>' : ""}
-                    </div>
-                    <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
-                    <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
-                    <div class="stlp__location-actions">
-                        <button type="button" class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
-                        <button type="button" class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>
+                        <div class="stlp__location-controls">
+                            ${activeId === location.id ? '<span class="stlp__badge">Active Scene</span>' : ""}
+                            <div class="stlp__location-actions">
+                                <button type="button" class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
+                                <button type="button" class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;

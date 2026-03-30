@@ -114,15 +114,36 @@
 }
 
 .stlp__location-card {
-    display: grid;
-    gap: 6px;
+    display: block;
 }
 
-.stlp__location-top {
+.stlp__location-row {
     display: flex;
-    align-items: start;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
+}
+
+.stlp__location-summary {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.stlp__location-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+}
+
+.stlp__location-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex: 0 0 auto;
 }
 
 .stlp__location-name {
@@ -142,7 +163,7 @@
 .stlp__actions,
 .stlp__location-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
 }
 
@@ -164,5 +185,19 @@
 @media (max-width: 800px) {
     .stlp__popup-grid {
         grid-template-columns: 1fr;
+    }
+
+    .stlp__location-row,
+    .stlp__location-controls {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .stlp__location-controls {
+        width: 100%;
+    }
+
+    .stlp__location-actions {
+        flex-wrap: wrap;
     }
 }
