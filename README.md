@@ -10,6 +10,7 @@ Dieses Plugin macht nur:
 - Locations erstellen, bearbeiten und loeschen
 - NPCs pro Location zuweisen
 - aktive Location pro Chat als Szenen-Metadaten setzen
+- den aktiven Location-Kontext im UI sichtbar machen
 
 Bewusst nicht Teil von v0:
 
@@ -48,7 +49,8 @@ Die aktive Szene wird chat-spezifisch in den Chat-Metadaten gehalten:
 2. NPCs aus vorhandenen Character Cards auswaehlen.
 3. `Save` klicken.
 4. In der Liste `Start Scene` klicken, um die aktive Location fuer den aktuellen Chat zu setzen.
+5. Die aktive Description erscheint oben als lesbarer Szenen-Kontext.
 
 ## Hinweis zu v0
 
-Das Plugin setzt bewusst nur strukturierte Szenen-Metadaten. Es injiziert keine Prompts und veraendert keine Gruppen- oder Chatlogik automatisch.
+Das Plugin setzt bewusst nur strukturierte Szenen-Metadaten und zeigt den aktiven Kontext an. Es injiziert keine Prompts und veraendert keine Gruppen- oder Chatlogik automatisch.

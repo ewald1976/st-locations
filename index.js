@@ -22,6 +22,7 @@ const dom = {
     saveButton: null,
     resetButton: null,
     deleteButton: null,
+    sceneContext: null,
 };
 
 function getContext() {
@@ -44,6 +45,10 @@ function getSettings() {
     if (!Array.isArray(extensionSettings[MODULE_NAME].locations)) {
         extensionSettings[MODULE_NAME].locations = [];
     }
+
+    extensionSettings[MODULE_NAME].locations = extensionSettings[MODULE_NAME].locations
+        .map(normalizeLocation)
+        .filter(Boolean);
 
     return extensionSettings[MODULE_NAME];
 }
@@ -70,6 +75,26 @@ function slugify(value) {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
+}
+
+function normalizeLocation(location) {
+    if (!location || typeof location !== 'object') {
+        return null;
+    }
+
+    const name = String(location.name || '').trim();
+    const description = String(location.description || '').trim();
+    const baseId = slugify(location.id || name) || 'location';
+    const npcs = Array.isArray(location.npcs)
+        ? location.npcs.map((npcId) => String(npcId)).filter(Boolean)
+        : [];
+
+    return {
+        id: baseId,
+        name,
+        description,
+        npcs: [...new Set(npcs)],
+    };
 }
 
 function dedupeId(baseId, ignoreId = null) {
@@ -166,15 +191,13 @@ async function saveLocation() {
         return;
     }
 
-    const baseId = slugify(name) || 'location';
-    const id = existingId || dedupeId(baseId);
-    const resolvedId = existingId ? dedupeId(baseId, existingId) : id;
+    const createdId = existingId || dedupeId(slugify(name) || 'location');
 
     const location = {
-        id: resolvedId,
+        id: createdId,
         name,
         description,
-        npcs: getSelectedNpcIds(),
+        npcs: [...new Set(getSelectedNpcIds())],
     };
 
     const existingIndex = settings.locations.findIndex((item) => item.id === existingId);
@@ -202,6 +225,12 @@ async function saveLocation() {
 async function deleteLocation() {
     const locationId = dom.formId.value;
     if (!locationId) {
+        return;
+    }
+
+    const location = findLocation(locationId);
+    const confirmed = window.confirm(`Location wirklich löschen${location?.name ? `: ${location.name}` : ''}?`);
+    if (!confirmed) {
         return;
     }
 
@@ -264,20 +293,29 @@ function renderActiveScene() {
     if (!location) {
         dom.activeScene.classList.add('is-empty');
         dom.activeScene.innerHTML = '<div>Keine aktive Location in diesem Chat.</div>';
+        if (dom.sceneContext) {
+            dom.sceneContext.value = '';
+        }
         return;
     }
 
     const npcNames = getCharacterOptions()
         .filter((option) => location.npcs.includes(option.id))
         .map((option) => option.name);
+    const sceneContext = location.description || 'Keine Description gesetzt.';
 
     dom.activeScene.classList.remove('is-empty');
     dom.activeScene.innerHTML = `
         <div><span class="stlp__badge">Aktiv</span> <strong>${escapeHtml(location.name)}</strong></div>
-        <div>${escapeHtml(location.description || 'Keine Description gesetzt.')}</div>
+        <div>${escapeHtml(sceneContext)}</div>
         <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(', ') || 'Keine')}</div>
+        <div class="stlp__meta">Szene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
         <div class="stlp__meta">Szenenstart: ${escapeHtml(scene.sceneStartedAt || 'Noch nicht gestartet')}</div>
     `;
+
+    if (dom.sceneContext) {
+        dom.sceneContext.value = sceneContext;
+    }
 }
 
 function renderLocationList() {
@@ -332,6 +370,10 @@ function render() {
     renderActiveScene();
     renderLocationList();
     bindDynamicActions();
+
+    if (dom.sceneContext && !getSceneState().currentLocationId) {
+        dom.sceneContext.value = '';
+    }
 }
 
 async function mountSettings() {
@@ -357,6 +399,7 @@ async function mountSettings() {
     dom.saveButton = document.getElementById('stlp-save-location');
     dom.resetButton = document.getElementById('stlp-reset-form');
     dom.deleteButton = document.getElementById('stlp-delete-location');
+    dom.sceneContext = document.getElementById('stlp-scene-context');
 
     dom.saveButton.addEventListener('click', saveLocation);
     dom.resetButton.addEventListener('click', resetForm);
