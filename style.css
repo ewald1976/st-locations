@@ -72,25 +72,35 @@
     background: color-mix(in srgb, var(--stlp-surface) 72%, transparent);
 }
 
+.stlp__popup-sidebar {
+    align-content: start;
+    gap: 12px;
+}
+
+.stlp__popup-divider {
+    height: 1px;
+    background: color-mix(in srgb, var(--stlp-border) 85%, transparent);
+}
+
 .stlp__popup-list {
     display: grid;
-    gap: 6px;
+    gap: 4px;
     max-height: min(65vh, 720px);
     overflow-y: auto;
     padding-right: 4px;
+    align-content: start;
 }
 
 .stlp__popup-location {
     display: block;
-    padding: 10px 12px;
-    border: 1px solid var(--stlp-border);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--stlp-surface) 60%, transparent);
+    padding: 6px 4px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
 }
 
 .stlp__popup-location.is-selected {
-    border-color: color-mix(in srgb, var(--stlp-accent) 55%, var(--stlp-border));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 35%, transparent);
+    background: color-mix(in srgb, var(--stlp-surface) 55%, transparent);
 }
 
 .stlp__popup-location-row {
@@ -102,7 +112,7 @@
 
 .stlp__popup-location-summary {
     display: grid;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
     flex: 1 1 auto;
 }
@@ -117,18 +127,21 @@
 .stlp__popup-location-actions {
     flex-wrap: nowrap;
     align-items: center;
+    gap: 6px;
 }
 
 .stlp__icon-button {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
     padding: 0;
     justify-content: center;
+    font-size: 0.85em;
 }
 
 .stlp__popup-sidebar .stlp-new-location {
     width: 100%;
+    justify-content: flex-start;
 }
 
 .stlp textarea[readonly] {

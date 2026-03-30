@@ -1264,8 +1264,9 @@ function buildManagePopupContent() {
                     <div class="stlp__section-head"><strong>Locations</strong></div>
                     <div class="stlp__meta">Pick a location to edit or create a new one.</div>
                 </div>
-                <div class="stlp__popup-list"></div>
                 <button type="button" class="menu_button stlp-new-location">New Location</button>
+                <div class="stlp__popup-divider"></div>
+                <div class="stlp__popup-list"></div>
             </div>
             <div class="stlp__popup-column stlp__popup-editor">
                 <div class="stlp__popup-header">
