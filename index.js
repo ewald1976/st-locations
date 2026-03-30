@@ -12,6 +12,7 @@ const DEFAULT_SCENE = Object.freeze({
   locationSnapshot: null,
   selectedNpcId: null,
   selectedNpcIds: [],
+  pendingLocationIntro: null,
 });
 
 const CHAT_MODE = Object.freeze({
@@ -47,6 +48,7 @@ const popupState = {
 const runtimeState = {
   eventsBound: false,
   refreshTimeoutId: null,
+  introInjectionInFlight: false,
 };
 
 function getContext() {
@@ -602,7 +604,11 @@ async function openGroupScene(location, npcIds = location.npcs) {
   upsertGroupSceneRecord(location.id, group.id, target.chatFile, normalizedNpcIds);
   await persistSettings();
 
-  return true;
+  return {
+    isNew: target.isNew,
+    chatFile: target.chatFile,
+    groupId: group.id,
+  };
 }
 
 function buildDirectSceneChatName(location, npcId) {
@@ -689,7 +695,11 @@ async function openDirectScene(location, npcId) {
   upsertSceneChatRecord(location.id, npcId, target.chatFile);
   await persistSettings();
 
-  return true;
+  return {
+    isNew: target.isNew,
+    chatFile: target.chatFile,
+    npcId,
+  };
 }
 
 function getCheckedNpcIds(container) {
@@ -774,6 +784,74 @@ async function persistSettings() {
 
 async function persistMetadata() {
   await getContext().saveMetadata();
+}
+
+function createLocationIntroMessage(mode, location) {
+  const context = getContext();
+  const locationName = String(location?.name || "Location").trim() || "Location";
+  const description = String(location?.description || "").trim();
+  const text =
+    mode === "new"
+      ? `[Location: ${locationName}]\n${description || "No description set."}`
+      : `[Location: ${locationName}]\nThe scene continues in ${locationName}.`;
+
+  return {
+    name: context.name2 || "Assistant",
+    is_user: false,
+    is_system: false,
+    send_date: new Date().toISOString(),
+    mes: text,
+    extra: {
+      api: "location-plugin",
+      model: "location-plugin",
+      gen_id: Date.now(),
+      location_marker: true,
+      location_marker_mode: mode,
+    },
+  };
+}
+
+async function injectPendingLocationIntro(insertAt = null) {
+  if (runtimeState.introInjectionInFlight) {
+    return false;
+  }
+
+  const context = getContext();
+  const scene = getSceneState();
+  const pending = scene.pendingLocationIntro;
+
+  if (!pending?.mode || !pending?.location) {
+    return false;
+  }
+
+  runtimeState.introInjectionInFlight = true;
+
+  try {
+    const message = createLocationIntroMessage(pending.mode, pending.location);
+    const targetIndex =
+      Number.isInteger(insertAt) &&
+      insertAt >= 0 &&
+      insertAt <= context.chat.length
+        ? insertAt
+        : null;
+
+    if (targetIndex !== null) {
+      context.chat.splice(targetIndex, 0, message);
+      await context.saveChat();
+      await context.reloadCurrentChat();
+    } else {
+      context.chat.push(message);
+      context.addOneMessage(message);
+      await context.saveChat();
+    }
+
+    scene.pendingLocationIntro = null;
+    await persistMetadata();
+    scheduleRefresh();
+    return true;
+  } finally {
+    runtimeState.introInjectionInFlight = false;
+  }
 }
 
 async function saveLocationFromPopup() {
@@ -937,23 +1015,31 @@ async function switchLocation(locationId) {
     location.chat_mode === CHAT_MODE.DIRECT ||
     (location.chat_mode === CHAT_MODE.SELECT && selectedNpcIds.length === 1)
   ) {
-    const opened = await openDirectScene(location, selectedNpcId);
-    if (!opened) {
+    const target = await openDirectScene(location, selectedNpcId);
+    if (!target) {
       return;
     }
+    getSceneState().pendingLocationIntro = {
+      mode: target.isNew ? "new" : "continue",
+      location: structuredClone(location),
+    };
   }
 
   if (
     location.chat_mode === CHAT_MODE.GROUP ||
     (location.chat_mode === CHAT_MODE.SELECT && selectedNpcIds.length > 1)
   ) {
-    const opened = await openGroupScene(
+    const target = await openGroupScene(
       location,
       location.chat_mode === CHAT_MODE.GROUP ? location.npcs : selectedNpcIds,
     );
-    if (!opened) {
+    if (!target) {
       return;
     }
+    getSceneState().pendingLocationIntro = {
+      mode: target.isNew ? "new" : "continue",
+      location: structuredClone(location),
+    };
   }
 
   const scene = getSceneState();
@@ -1420,6 +1506,12 @@ function bindContextEvents() {
 
   eventSource.on(eventTypes.EXTENSION_SETTINGS_LOADED, () => scheduleRefresh());
   eventSource.on(eventTypes.SETTINGS_LOADED, () => scheduleRefresh(50));
+  eventSource.on(eventTypes.MESSAGE_SENT, (messageId) => {
+    void injectPendingLocationIntro(messageId);
+  });
+  eventSource.on(eventTypes.GENERATION_STARTED, () => {
+    void injectPendingLocationIntro();
+  });
 
   runtimeState.eventsBound = true;
 }
