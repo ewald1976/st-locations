@@ -101,7 +101,7 @@
 
 .stlp__npc-item,
 .stlp__location-card {
-    padding: 10px;
+    padding: 10px 12px;
     border: 1px solid var(--stlp-border);
     border-radius: 10px;
     background: color-mix(in srgb, var(--stlp-surface) 60%, transparent);
@@ -115,7 +115,7 @@
 
 .stlp__location-card {
     display: grid;
-    gap: 8px;
+    gap: 6px;
 }
 
 .stlp__location-top {
@@ -132,11 +132,6 @@
 .stlp__location-id {
     opacity: 0.7;
     font-size: 0.9em;
-}
-
-.stlp__location-description {
-    white-space: pre-wrap;
-    opacity: 0.92;
 }
 
 .stlp__meta {

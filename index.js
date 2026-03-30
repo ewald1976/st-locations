@@ -1024,7 +1024,6 @@ function renderLocationList() {
                         </div>
                         ${activeId === location.id ? '<span class="stlp__badge">Active Scene</span>' : ""}
                     </div>
-                    <div class="stlp__location-description">${escapeHtml(location.description || "No description set.")}</div>
                     <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
                     <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
                     <div class="stlp__location-actions">
