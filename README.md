@@ -45,10 +45,10 @@ The active scene is stored per chat in chat metadata:
 
 ## Usage
 
-1. Enter a location name and description.
-2. Select NPCs from existing character cards.
-3. Click `Save`.
-4. Click `Start Scene` in the list to set the active location for the current chat.
+1. Click `Manage Locations`.
+2. Create or edit a location in the popup.
+3. Select NPCs from existing character cards and click `Save`.
+4. Click `Start Scene` in the drawer to set the active location for the current chat.
 5. The active description appears above as readable scene context.
 
 ## v0 Note

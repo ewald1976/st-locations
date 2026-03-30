@@ -15,14 +15,22 @@ const dom = {
   root: null,
   activeScene: null,
   locationList: null,
-  npcList: null,
+  sceneContext: null,
+  manageButton: null,
+};
+
+const popupState = {
+  popup: null,
+  root: null,
+  list: null,
   formId: null,
   formName: null,
   formDescription: null,
+  npcList: null,
   saveButton: null,
-  resetButton: null,
+  cancelButton: null,
   deleteButton: null,
-  sceneContext: null,
+  newButton: null,
 };
 
 function getContext() {
@@ -152,42 +160,72 @@ function findLocation(locationId) {
   );
 }
 
-function getSelectedNpcIds() {
+function getCheckedNpcIds(container) {
+  if (!container) {
+    return [];
+  }
+
   return Array.from(
-    dom.npcList.querySelectorAll('input[type="checkbox"]:checked'),
+    container.querySelectorAll('input[type="checkbox"]:checked'),
   ).map((input) => input.value);
 }
 
-function resetForm() {
-  dom.formId.value = "";
-  dom.formName.value = "";
-  dom.formDescription.value = "";
-
-  for (const input of dom.npcList.querySelectorAll('input[type="checkbox"]')) {
-    input.checked = false;
-  }
-
-  dom.deleteButton.disabled = true;
+function clearPopupRefs() {
+  popupState.popup = null;
+  popupState.root = null;
+  popupState.list = null;
+  popupState.formId = null;
+  popupState.formName = null;
+  popupState.formDescription = null;
+  popupState.npcList = null;
+  popupState.saveButton = null;
+  popupState.cancelButton = null;
+  popupState.deleteButton = null;
+  popupState.newButton = null;
 }
 
-function populateForm(locationId) {
-  const location = findLocation(locationId);
-
-  if (!location) {
-    resetForm();
+function resetPopupForm() {
+  if (!popupState.root) {
     return;
   }
 
-  dom.formId.value = location.id;
-  dom.formName.value = location.name;
-  dom.formDescription.value = location.description;
+  popupState.formId.value = "";
+  popupState.formName.value = "";
+  popupState.formDescription.value = "";
+
+  for (const input of popupState.npcList.querySelectorAll(
+    'input[type="checkbox"]',
+  )) {
+    input.checked = false;
+  }
+
+  popupState.deleteButton.disabled = true;
+}
+
+function populatePopupForm(locationId) {
+  if (!popupState.root) {
+    return;
+  }
+
+  const location = findLocation(locationId);
+
+  if (!location) {
+    resetPopupForm();
+    return;
+  }
+
+  popupState.formId.value = location.id;
+  popupState.formName.value = location.name;
+  popupState.formDescription.value = location.description;
 
   const selectedIds = new Set(location.npcs);
-  for (const input of dom.npcList.querySelectorAll('input[type="checkbox"]')) {
+  for (const input of popupState.npcList.querySelectorAll(
+    'input[type="checkbox"]',
+  )) {
     input.checked = selectedIds.has(input.value);
   }
 
-  dom.deleteButton.disabled = false;
+  popupState.deleteButton.disabled = false;
 }
 
 async function persistSettings() {
@@ -198,11 +236,15 @@ async function persistMetadata() {
   await getContext().saveMetadata();
 }
 
-async function saveLocation() {
+async function saveLocationFromPopup() {
+  if (!popupState.root) {
+    return;
+  }
+
   const settings = getSettings();
-  const existingId = dom.formId.value || null;
-  const name = dom.formName.value.trim();
-  const description = dom.formDescription.value.trim();
+  const existingId = popupState.formId.value || null;
+  const name = popupState.formName.value.trim();
+  const description = popupState.formDescription.value.trim();
 
   if (!name) {
     toastr.warning("Location name is required.");
@@ -210,17 +252,17 @@ async function saveLocation() {
   }
 
   const createdId = existingId || dedupeId(slugify(name) || "location");
-
   const location = {
     id: createdId,
     name,
     description,
-    npcs: [...new Set(getSelectedNpcIds())],
+    npcs: [...new Set(getCheckedNpcIds(popupState.npcList))],
   };
 
   const existingIndex = settings.locations.findIndex(
     (item) => item.id === existingId,
   );
+
   if (existingIndex >= 0) {
     settings.locations[existingIndex] = location;
   } else {
@@ -238,27 +280,30 @@ async function saveLocation() {
 
   await persistSettings();
   render();
-  populateForm(location.id);
+  populatePopupForm(location.id);
+  renderManagePopup();
   toastr.success("Location saved.");
 }
 
-async function deleteLocation() {
-  const locationId = dom.formId.value;
+async function deleteLocationById(locationId) {
   if (!locationId) {
     return;
   }
 
   const location = findLocation(locationId);
-  const confirmed = window.confirm(
-    `Delete location${location?.name ? `: ${location.name}` : ""}?`,
-  );
+  if (!location) {
+    toastr.error("Location not found.");
+    return;
+  }
+
+  const confirmed = window.confirm(`Delete location: ${location.name}?`);
   if (!confirmed) {
     return;
   }
 
   const settings = getSettings();
   settings.locations = settings.locations.filter(
-    (location) => location.id !== locationId,
+    (entry) => entry.id !== locationId,
   );
   await persistSettings();
 
@@ -268,8 +313,12 @@ async function deleteLocation() {
     await persistMetadata();
   }
 
-  resetForm();
   render();
+  if (popupState.root) {
+    resetPopupForm();
+    renderManagePopup();
+  }
+
   toastr.success("Location deleted.");
 }
 
@@ -288,29 +337,11 @@ async function switchLocation(locationId) {
 
   await persistMetadata();
   render();
-  toastr.success(`Scene started: ${location.name}`);
-}
-
-function renderNpcOptions() {
-  const options = getCharacterOptions();
-
-  if (!options.length) {
-    dom.npcList.innerHTML =
-      '<div class="stlp__empty">No character cards found.</div>';
-    return;
+  if (popupState.root) {
+    renderManagePopup();
   }
 
-  const selectedIds = new Set(getSelectedNpcIds());
-  dom.npcList.innerHTML = options
-    .map(
-      (option) => `
-            <label class="stlp__npc-item">
-                <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.has(option.id) ? "checked" : ""} />
-                <span>${escapeHtml(option.name)}</span>
-            </label>
-        `,
-    )
-    .join("");
+  toastr.success(`Scene started: ${location.name}`);
 }
 
 function renderActiveScene() {
@@ -320,11 +351,8 @@ function renderActiveScene() {
 
   if (!location) {
     dom.activeScene.classList.add("is-empty");
-    dom.activeScene.innerHTML =
-      "<div>No active location in this chat.</div>";
-    if (dom.sceneContext) {
-      dom.sceneContext.value = "";
-    }
+    dom.activeScene.innerHTML = "<div>No active location in this chat.</div>";
+    dom.sceneContext.value = "";
     return;
   }
 
@@ -341,10 +369,7 @@ function renderActiveScene() {
         <div class="stlp__meta">Scene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
         <div class="stlp__meta">Scene started: ${escapeHtml(scene.sceneStartedAt || "Not started yet")}</div>
     `;
-
-  if (dom.sceneContext) {
-    dom.sceneContext.value = sceneContext;
-  }
+  dom.sceneContext.value = sceneContext;
 }
 
 function renderLocationList() {
@@ -376,8 +401,8 @@ function renderLocationList() {
                     <div class="stlp__location-description">${escapeHtml(location.description || "No description set.")}</div>
                     <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
                     <div class="stlp__location-actions">
-                        <button class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
-                        <button class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>
+                        <button type="button" class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
+                        <button type="button" class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>
                     </div>
                 </div>
             `;
@@ -390,7 +415,7 @@ function bindDynamicActions() {
     ".stlp-edit-location",
   )) {
     button.addEventListener("click", () =>
-      populateForm(button.dataset.locationId),
+      openManageLocationsPopup(button.dataset.locationId),
     );
   }
 
@@ -404,14 +429,187 @@ function bindDynamicActions() {
 }
 
 function render() {
-  renderNpcOptions();
   renderActiveScene();
   renderLocationList();
   bindDynamicActions();
+}
 
-  if (dom.sceneContext && !getSceneState().currentLocationId) {
-    dom.sceneContext.value = "";
+function renderPopupNpcOptions(selectedIds = []) {
+  const options = getCharacterOptions();
+  const selected = new Set(selectedIds);
+
+  if (!options.length) {
+    popupState.npcList.innerHTML =
+      '<div class="stlp__empty">No character cards found.</div>';
+    return;
   }
+
+  popupState.npcList.innerHTML = options
+    .map(
+      (option) => `
+            <label class="stlp__npc-item">
+                <input type="checkbox" value="${escapeHtml(option.id)}" ${selected.has(option.id) ? "checked" : ""} />
+                <span>${escapeHtml(option.name)}</span>
+            </label>
+        `,
+    )
+    .join("");
+}
+
+function renderManagePopup() {
+  if (!popupState.root) {
+    return;
+  }
+
+  const settings = getSettings();
+  const activeId = getSceneState().currentLocationId;
+  const characters = getCharacterOptions();
+  const editingId = popupState.formId?.value || "";
+
+  if (!settings.locations.length) {
+    popupState.list.innerHTML =
+      '<div class="stlp__empty">No locations created yet.</div>';
+  } else {
+    popupState.list.innerHTML = settings.locations
+      .map((location) => {
+        const npcNames = characters
+          .filter((character) => location.npcs.includes(character.id))
+          .map((character) => character.name);
+
+        return `
+                <div class="stlp__popup-location ${editingId === location.id ? "is-selected" : ""}">
+                    <div class="stlp__popup-location-row">
+                        <div>
+                            <div class="stlp__location-name">${escapeHtml(location.name)}</div>
+                            <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
+                        </div>
+                        ${activeId === location.id ? '<span class="stlp__badge">Active</span>' : ""}
+                    </div>
+                    <div class="stlp__location-actions">
+                        <button type="button" class="menu_button stlp-popup-edit" data-location-id="${escapeHtml(location.id)}">Edit</button>
+                        <button type="button" class="menu_button menu_button_danger stlp-popup-delete" data-location-id="${escapeHtml(location.id)}">Remove</button>
+                    </div>
+                </div>
+            `;
+      })
+      .join("");
+  }
+
+  const selectedIds =
+    editingId && findLocation(editingId)
+      ? findLocation(editingId).npcs
+      : getCheckedNpcIds(popupState.npcList);
+  renderPopupNpcOptions(selectedIds);
+  bindPopupActions();
+}
+
+function bindPopupActions() {
+  if (!popupState.root) {
+    return;
+  }
+
+  popupState.newButton.onclick = () => {
+    resetPopupForm();
+    renderManagePopup();
+  };
+  popupState.cancelButton.onclick = () => {
+    resetPopupForm();
+    renderManagePopup();
+  };
+  popupState.saveButton.onclick = () => void saveLocationFromPopup();
+  popupState.deleteButton.onclick = () =>
+    void deleteLocationById(popupState.formId.value);
+
+  for (const button of popupState.list.querySelectorAll(".stlp-popup-edit")) {
+    button.onclick = () => {
+      populatePopupForm(button.dataset.locationId);
+      renderManagePopup();
+    };
+  }
+
+  for (const button of popupState.list.querySelectorAll(".stlp-popup-delete")) {
+    button.onclick = () => void deleteLocationById(button.dataset.locationId);
+  }
+}
+
+function buildManagePopupContent() {
+  const wrapper = document.createElement("div");
+  wrapper.className = "stlp__popup";
+  wrapper.innerHTML = `
+        <div class="stlp__popup-grid">
+            <div class="stlp__popup-column">
+                <div class="stlp__section-head"><strong>Locations</strong></div>
+                <div class="stlp__popup-list"></div>
+                <button type="button" class="menu_button stlp-new-location">New Location</button>
+            </div>
+            <div class="stlp__popup-column">
+                <div class="stlp__section-head"><strong>Location Editor</strong></div>
+                <input type="hidden" class="stlp-popup-location-id" />
+                <label class="stlp__label" for="stlp-popup-location-name">Location Name</label>
+                <input id="stlp-popup-location-name" class="text_pole stlp-popup-location-name" type="text" placeholder="Tavern" />
+                <label class="stlp__label" for="stlp-popup-location-description">Description</label>
+                <textarea
+                    id="stlp-popup-location-description"
+                    class="text_pole stlp-popup-location-description"
+                    rows="4"
+                    placeholder="A warm, noisy tavern filled with conversation and the smell of beer."
+                ></textarea>
+                <div class="stlp__label">Select NPCs</div>
+                <div class="stlp__npc-list stlp-popup-npcs"></div>
+                <div class="stlp__actions">
+                    <button type="button" class="menu_button stlp-popup-save">Save</button>
+                    <button type="button" class="menu_button menu_button_secondary stlp-popup-cancel">Cancel</button>
+                    <button type="button" class="menu_button menu_button_danger stlp-popup-delete-current">Delete</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+  popupState.root = wrapper;
+  popupState.list = wrapper.querySelector(".stlp__popup-list");
+  popupState.formId = wrapper.querySelector(".stlp-popup-location-id");
+  popupState.formName = wrapper.querySelector(".stlp-popup-location-name");
+  popupState.formDescription = wrapper.querySelector(
+    ".stlp-popup-location-description",
+  );
+  popupState.npcList = wrapper.querySelector(".stlp-popup-npcs");
+  popupState.saveButton = wrapper.querySelector(".stlp-popup-save");
+  popupState.cancelButton = wrapper.querySelector(".stlp-popup-cancel");
+  popupState.deleteButton = wrapper.querySelector(".stlp-popup-delete-current");
+  popupState.newButton = wrapper.querySelector(".stlp-new-location");
+
+  resetPopupForm();
+  renderManagePopup();
+
+  return wrapper;
+}
+
+async function openManageLocationsPopup(locationId = null) {
+  if (popupState.popup) {
+    if (locationId) {
+      populatePopupForm(locationId);
+      renderManagePopup();
+    }
+    return;
+  }
+
+  const context = getContext();
+  const content = buildManagePopupContent();
+  const popup = new context.Popup(content, context.POPUP_TYPE.DISPLAY, null, {
+    wide: true,
+    large: true,
+    allowVerticalScrolling: true,
+    onClose: () => clearPopupRefs(),
+  });
+
+  popupState.popup = popup;
+
+  if (locationId) {
+    populatePopupForm(locationId);
+    renderManagePopup();
+  }
+
+  await popup.show();
 }
 
 async function mountSettings() {
@@ -433,21 +631,12 @@ async function mountSettings() {
   dom.root = document.getElementById("st-location-plugin");
   dom.activeScene = document.getElementById("stlp-active-scene");
   dom.locationList = document.getElementById("stlp-location-list");
-  dom.npcList = document.getElementById("stlp-npc-list");
-  dom.formId = document.getElementById("stlp-location-id");
-  dom.formName = document.getElementById("stlp-location-name");
-  dom.formDescription = document.getElementById("stlp-location-description");
-  dom.saveButton = document.getElementById("stlp-save-location");
-  dom.resetButton = document.getElementById("stlp-reset-form");
-  dom.deleteButton = document.getElementById("stlp-delete-location");
   dom.sceneContext = document.getElementById("stlp-scene-context");
+  dom.manageButton = document.getElementById("stlp-manage-locations");
 
-  dom.saveButton.addEventListener("click", saveLocation);
-  dom.resetButton.addEventListener("click", resetForm);
-  dom.deleteButton.addEventListener("click", deleteLocation);
+  dom.manageButton.addEventListener("click", () => void openManageLocationsPopup());
 
   render();
-  resetForm();
   return true;
 }
 
@@ -470,11 +659,17 @@ waitForSettingsHost();
 window.addEventListener("focus", () => {
   if (dom.root) {
     render();
+    if (popupState.root) {
+      renderManagePopup();
+    }
   }
 });
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && dom.root) {
     render();
+    if (popupState.root) {
+      renderManagePopup();
+    }
   }
 });
