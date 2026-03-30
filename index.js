@@ -238,19 +238,28 @@ function normalizeSceneChat(record) {
     return null;
   }
 
-  if (
-    typeof record.locationId !== "string" ||
-    typeof record.npcId !== "string" ||
-    typeof record.chatFile !== "string"
-  ) {
+  if (typeof record.locationId !== "string" || typeof record.chatFile !== "string") {
     return null;
   }
 
-  return {
+  const normalized = {
     locationId: record.locationId,
-    npcId: record.npcId,
     chatFile: record.chatFile,
   };
+
+  if (typeof record.npcId === "string") {
+    normalized.npcId = record.npcId;
+  }
+
+  if (typeof record.groupId === "string") {
+    normalized.groupId = record.groupId;
+  }
+
+  if (typeof record.mode === "string") {
+    normalized.mode = record.mode;
+  }
+
+  return normalized;
 }
 
 function getSceneChatRecords() {
@@ -266,7 +275,10 @@ function getSceneChatRecords() {
 function findSceneChatRecord(locationId, npcId) {
   return (
     getSceneChatRecords().find(
-      (record) => record.locationId === locationId && record.npcId === npcId,
+      (record) =>
+        record.locationId === locationId &&
+        record.npcId === npcId &&
+        (record.mode === CHAT_MODE.DIRECT || !record.mode),
     ) || null
   );
 }
@@ -277,6 +289,35 @@ function upsertSceneChatRecord(locationId, npcId, chatFile) {
     (record) => record.locationId === locationId && record.npcId === npcId,
   );
   const nextRecord = { locationId, npcId, chatFile };
+
+  if (existingIndex >= 0) {
+    records[existingIndex] = nextRecord;
+  } else {
+    records.push(nextRecord);
+  }
+}
+
+function findGroupSceneRecord(locationId) {
+  return (
+    getSceneChatRecords().find(
+      (record) =>
+        record.locationId === locationId && record.mode === CHAT_MODE.GROUP,
+    ) || null
+  );
+}
+
+function upsertGroupSceneRecord(locationId, groupId, chatFile) {
+  const records = getSceneChatRecords();
+  const existingIndex = records.findIndex(
+    (record) =>
+      record.locationId === locationId && record.mode === CHAT_MODE.GROUP,
+  );
+  const nextRecord = {
+    locationId,
+    mode: CHAT_MODE.GROUP,
+    groupId,
+    chatFile,
+  };
 
   if (existingIndex >= 0) {
     records[existingIndex] = nextRecord;
@@ -310,6 +351,204 @@ async function getPastChatsForNpcId(npcId) {
   }
 
   return Object.values(data);
+}
+
+function normalizeGroup(group) {
+  const normalized = { ...group };
+
+  if (typeof normalized.id === "number") {
+    normalized.id = String(normalized.id);
+  }
+
+  if (normalized.disabled_members == undefined) {
+    normalized.disabled_members = [];
+  }
+
+  if (normalized.chat_id == undefined) {
+    normalized.chat_id = normalized.id;
+    normalized.chats = [normalized.id];
+  }
+
+  if (typeof normalized.chat_id === "number") {
+    normalized.chat_id = String(normalized.chat_id);
+  }
+
+  if (Array.isArray(normalized.chats)) {
+    normalized.chats = normalized.chats.map((chatId) => String(chatId));
+  } else {
+    normalized.chats = [];
+  }
+
+  return normalized;
+}
+
+async function refreshContextGroups() {
+  const context = getContext();
+  const response = await fetch("/api/groups/all", {
+    method: "POST",
+    headers: context.getRequestHeaders({ omitContentType: true }),
+  });
+
+  if (!response.ok) {
+    return context.groups;
+  }
+
+  const groups = (await response.json()).map(normalizeGroup);
+  context.groups.splice(0, context.groups.length, ...groups);
+  return context.groups;
+}
+
+function getGroupMemberAvatars(location) {
+  return location.npcs
+    .map((npcId) => {
+      const characterIndex = findCharacterIndexByNpcId(npcId);
+      return characterIndex >= 0
+        ? getContext().characters[characterIndex]?.avatar
+        : null;
+    })
+    .filter(Boolean);
+}
+
+function buildSceneGroupName(location) {
+  return `Location: ${location.name}`;
+}
+
+async function getOrCreateSceneGroup(location) {
+  await refreshContextGroups();
+
+  const existingRecord = findGroupSceneRecord(location.id);
+  if (existingRecord?.groupId) {
+    const existingGroup = getContext().groups.find(
+      (group) => group.id === existingRecord.groupId,
+    );
+    if (existingGroup) {
+      return existingGroup;
+    }
+  }
+
+  const memberAvatars = [...new Set(getGroupMemberAvatars(location))];
+  const chatName = getContext().humanizedDateTime();
+  const groupModel = {
+    name: buildSceneGroupName(location),
+    members: memberAvatars,
+    avatar_url: "",
+    allow_self_responses: false,
+    hideMutedSprites: false,
+    activation_strategy: 0,
+    generation_mode: 0,
+    disabled_members: [],
+    fav: false,
+    chat_id: chatName,
+    chats: [chatName],
+    auto_mode_delay: 5,
+  };
+
+  const response = await fetch("/api/groups/create", {
+    method: "POST",
+    headers: getContext().getRequestHeaders(),
+    body: JSON.stringify(groupModel),
+  });
+
+  if (!response.ok) {
+    toastr.error("Group scene could not be created.");
+    return null;
+  }
+
+  const createdGroup = normalizeGroup(await response.json());
+  await refreshContextGroups();
+  return (
+    getContext().groups.find((group) => group.id === createdGroup.id) ||
+    createdGroup
+  );
+}
+
+async function saveGroupDefinition(group) {
+  await fetch("/api/groups/edit", {
+    method: "POST",
+    headers: getContext().getRequestHeaders(),
+    body: JSON.stringify(group),
+  });
+}
+
+async function createGroupSceneChat(group) {
+  const newChatName = getContext().humanizedDateTime();
+  if (!group.chats.includes(newChatName)) {
+    group.chats.push(newChatName);
+  }
+  group.chat_id = newChatName;
+  await saveGroupDefinition(group);
+  return newChatName;
+}
+
+async function chooseGroupSceneChat(location, group) {
+  const context = getContext();
+  const existingRecord = findGroupSceneRecord(location.id);
+
+  if (!existingRecord?.chatFile || !group.chats.includes(existingRecord.chatFile)) {
+    return {
+      chatFile: group.chat_id || group.chats[group.chats.length - 1],
+      isNew: !existingRecord?.chatFile,
+    };
+  }
+
+  const result = await context.Popup.show.confirm(
+    "Scene Chat Found",
+    `<p>There is already a group scene chat for <strong>${escapeHtml(location.name)}</strong>.</p><p>Do you want to continue it?</p>`,
+    {
+      okButton: "Continue Scene",
+      cancelButton: false,
+      customButtons: [
+        {
+          text: "Start New Scene",
+          result: context.POPUP_RESULT.CUSTOM1,
+          classes: ["menu_button"],
+          appendAtEnd: true,
+        },
+      ],
+      defaultResult: context.POPUP_RESULT.AFFIRMATIVE,
+    },
+  );
+
+  if (result === context.POPUP_RESULT.CUSTOM1) {
+    return {
+      chatFile: await createGroupSceneChat(group),
+      isNew: true,
+    };
+  }
+
+  if (result !== context.POPUP_RESULT.AFFIRMATIVE) {
+    return null;
+  }
+
+  return {
+    chatFile: existingRecord.chatFile,
+    isNew: false,
+  };
+}
+
+async function openGroupScene(location) {
+  const context = getContext();
+  const group = await getOrCreateSceneGroup(location);
+
+  if (!group) {
+    return false;
+  }
+
+  const target = await chooseGroupSceneChat(location, group);
+  if (!target?.chatFile) {
+    return false;
+  }
+
+  await context.executeSlashCommandsWithOptions(
+    `/go ${JSON.stringify(group.name)}`,
+    { handleExecutionErrors: true },
+  );
+  await context.openGroupChat(group.id, target.chatFile);
+
+  upsertGroupSceneRecord(location.id, group.id, target.chatFile);
+  await persistSettings();
+
+  return true;
 }
 
 function buildDirectSceneChatName(location, npcId) {
@@ -639,6 +878,13 @@ async function switchLocation(locationId) {
     location.chat_mode === CHAT_MODE.SELECT
   ) {
     const opened = await openDirectScene(location, selectedNpcId);
+    if (!opened) {
+      return;
+    }
+  }
+
+  if (location.chat_mode === CHAT_MODE.GROUP) {
+    const opened = await openGroupScene(location);
     if (!opened) {
       return;
     }
