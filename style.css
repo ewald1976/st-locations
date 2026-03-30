@@ -53,7 +53,7 @@
 
 .stlp__popup-grid {
     display: grid;
-    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
     gap: 16px;
     align-items: start;
 }
@@ -82,7 +82,7 @@
 
 .stlp__popup-location {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     padding: 12px;
     border: 1px solid var(--stlp-border);
     border-radius: 10px;
@@ -110,6 +110,19 @@
 .stlp__popup-location-meta {
     display: grid;
     gap: 4px;
+}
+
+.stlp__popup-sidebar .stlp__location-actions {
+    flex-wrap: wrap;
+}
+
+.stlp__popup-sidebar .stlp__location-actions .menu_button {
+    min-width: 88px;
+    justify-content: center;
+}
+
+.stlp__popup-sidebar .stlp-new-location {
+    width: 100%;
 }
 
 .stlp textarea[readonly] {
