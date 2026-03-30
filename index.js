@@ -1186,10 +1186,12 @@ function renderManagePopup() {
         return `
                 <div class="stlp__popup-location ${editingId === location.id ? "is-selected" : ""}">
                     <div class="stlp__popup-location-row">
-                        <div>
+                        <div class="stlp__popup-location-summary">
                             <div class="stlp__location-name">${escapeHtml(location.name)}</div>
-                            <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
-                            <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
+                            <div class="stlp__popup-location-meta">
+                                <span class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</span>
+                                <span class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</span>
+                            </div>
                         </div>
                         ${activeId === location.id ? '<span class="stlp__badge">Active</span>' : ""}
                     </div>
@@ -1264,36 +1266,55 @@ function buildManagePopupContent() {
   wrapper.className = "stlp__popup";
   wrapper.innerHTML = `
         <div class="stlp__popup-grid">
-            <div class="stlp__popup-column">
-                <div class="stlp__section-head"><strong>Locations</strong></div>
+            <div class="stlp__popup-column stlp__popup-sidebar">
+                <div class="stlp__popup-header">
+                    <div class="stlp__section-head"><strong>Locations</strong></div>
+                    <div class="stlp__meta">Pick a location to edit or create a new one.</div>
+                </div>
                 <div class="stlp__popup-list"></div>
                 <button type="button" class="menu_button stlp-new-location">New Location</button>
             </div>
-            <div class="stlp__popup-column">
-                <div class="stlp__section-head"><strong>Location Editor</strong></div>
-                <input type="hidden" class="stlp-popup-location-id" />
-                <label class="stlp__label" for="stlp-popup-location-name">Location Name</label>
-                <input id="stlp-popup-location-name" class="text_pole stlp-popup-location-name" type="text" placeholder="Tavern" />
-                <label class="stlp__label" for="stlp-popup-location-description">Description</label>
-                <textarea
-                    id="stlp-popup-location-description"
-                    class="text_pole stlp-popup-location-description"
-                    rows="4"
-                    placeholder="A warm, noisy tavern filled with conversation and the smell of beer."
-                ></textarea>
-                <label class="stlp__label" for="stlp-popup-chat-mode">Interaction Mode</label>
-                <select id="stlp-popup-chat-mode" class="text_pole stlp-popup-chat-mode">
-                    <option value="direct">Direct</option>
-                    <option value="group">Group</option>
-                    <option value="select">Select</option>
-                </select>
-                <div class="stlp-primary-npc-row">
-                    <label class="stlp__label" for="stlp-popup-primary-npc">Primary NPC</label>
-                    <select id="stlp-popup-primary-npc" class="text_pole stlp-popup-primary-npc"></select>
+            <div class="stlp__popup-column stlp__popup-editor">
+                <div class="stlp__popup-header">
+                    <div class="stlp__section-head"><strong>Location Editor</strong></div>
+                    <div class="stlp__meta">Define the scene anchor and choose how the scene starts.</div>
                 </div>
-                <div class="stlp__label">Select NPCs</div>
-                <div class="stlp__npc-list stlp-popup-npcs"></div>
-                <div class="stlp__actions">
+                <input type="hidden" class="stlp-popup-location-id" />
+                <div class="stlp__editor-section">
+                    <label class="stlp__label" for="stlp-popup-location-name">Location Name</label>
+                    <input id="stlp-popup-location-name" class="text_pole stlp-popup-location-name" type="text" placeholder="Tavern" />
+                </div>
+                <div class="stlp__editor-section">
+                    <label class="stlp__label" for="stlp-popup-location-description">Description</label>
+                    <textarea
+                        id="stlp-popup-location-description"
+                        class="text_pole stlp-popup-location-description"
+                        rows="5"
+                        placeholder="A warm, noisy tavern filled with conversation and the smell of beer."
+                    ></textarea>
+                </div>
+                <div class="stlp__editor-section stlp__editor-grid">
+                    <div>
+                        <label class="stlp__label" for="stlp-popup-chat-mode">Interaction Mode</label>
+                        <select id="stlp-popup-chat-mode" class="text_pole stlp-popup-chat-mode">
+                            <option value="direct">Direct</option>
+                            <option value="group">Group</option>
+                            <option value="select">Select</option>
+                        </select>
+                    </div>
+                    <div class="stlp-primary-npc-row">
+                        <label class="stlp__label" for="stlp-popup-primary-npc">Primary NPC</label>
+                        <select id="stlp-popup-primary-npc" class="text_pole stlp-popup-primary-npc"></select>
+                    </div>
+                </div>
+                <div class="stlp__editor-section">
+                    <div class="stlp__section-head">
+                        <strong>Select NPCs</strong>
+                    </div>
+                    <div class="stlp__meta">Choose which characters belong to this location.</div>
+                    <div class="stlp__npc-list stlp-popup-npcs"></div>
+                </div>
+                <div class="stlp__actions stlp__popup-actions">
                     <button type="button" class="menu_button stlp-popup-save">Save</button>
                     <button type="button" class="menu_button menu_button_secondary stlp-popup-cancel">Cancel</button>
                     <button type="button" class="menu_button menu_button_danger stlp-popup-delete-current">Delete</button>
