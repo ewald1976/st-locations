@@ -2,6 +2,7 @@ const MODULE_NAME = "st_locations";
 
 const DEFAULT_SETTINGS = Object.freeze({
   locations: [],
+  sceneChats: [],
 });
 
 const DEFAULT_SCENE = Object.freeze({
@@ -219,10 +220,183 @@ function getCharacterNameById(characterId) {
   );
 }
 
+function findCharacterIndexByNpcId(npcId) {
+  return getContext().characters.findIndex((character, index) => {
+    const candidateId = String(character.avatar || character.name || index);
+    return candidateId === npcId;
+  });
+}
+
 function getLocationNpcOptions(location) {
   return getCharacterOptions().filter((character) =>
     location.npcs.includes(character.id),
   );
+}
+
+function normalizeSceneChat(record) {
+  if (!record || typeof record !== "object") {
+    return null;
+  }
+
+  if (
+    typeof record.locationId !== "string" ||
+    typeof record.npcId !== "string" ||
+    typeof record.chatFile !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    locationId: record.locationId,
+    npcId: record.npcId,
+    chatFile: record.chatFile,
+  };
+}
+
+function getSceneChatRecords() {
+  const settings = getSettings();
+  if (!Array.isArray(settings.sceneChats)) {
+    settings.sceneChats = [];
+  }
+
+  settings.sceneChats = settings.sceneChats.map(normalizeSceneChat).filter(Boolean);
+  return settings.sceneChats;
+}
+
+function findSceneChatRecord(locationId, npcId) {
+  return (
+    getSceneChatRecords().find(
+      (record) => record.locationId === locationId && record.npcId === npcId,
+    ) || null
+  );
+}
+
+function upsertSceneChatRecord(locationId, npcId, chatFile) {
+  const records = getSceneChatRecords();
+  const existingIndex = records.findIndex(
+    (record) => record.locationId === locationId && record.npcId === npcId,
+  );
+  const nextRecord = { locationId, npcId, chatFile };
+
+  if (existingIndex >= 0) {
+    records[existingIndex] = nextRecord;
+  } else {
+    records.push(nextRecord);
+  }
+}
+
+async function getPastChatsForNpcId(npcId) {
+  const context = getContext();
+  const characterIndex = findCharacterIndexByNpcId(npcId);
+
+  if (characterIndex < 0) {
+    return [];
+  }
+
+  const character = context.characters[characterIndex];
+  const response = await fetch("/api/characters/chats", {
+    method: "POST",
+    body: JSON.stringify({ avatar_url: character.avatar }),
+    headers: context.getRequestHeaders(),
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const data = await response.json();
+  if (typeof data === "object" && data.error === true) {
+    return [];
+  }
+
+  return Object.values(data);
+}
+
+function buildDirectSceneChatName(location, npcId) {
+  const context = getContext();
+  const npcName = getCharacterNameById(npcId) || "NPC";
+  return `${location.name} - ${npcName} - ${context.humanizedDateTime()}`;
+}
+
+async function chooseDirectSceneChat(location, npcId) {
+  const context = getContext();
+  const existingRecord = findSceneChatRecord(location.id, npcId);
+
+  if (!existingRecord) {
+    return {
+      chatFile: buildDirectSceneChatName(location, npcId),
+      isNew: true,
+    };
+  }
+
+  const pastChats = await getPastChatsForNpcId(npcId);
+  const chatExists = pastChats.some(
+    (chat) => chat.file_name.replace(/\.jsonl$/, "") === existingRecord.chatFile,
+  );
+
+  if (!chatExists) {
+    return {
+      chatFile: buildDirectSceneChatName(location, npcId),
+      isNew: true,
+    };
+  }
+
+  const result = await context.Popup.show.confirm(
+    "Scene Chat Found",
+    `<p>There is already a scene chat for <strong>${escapeHtml(location.name)}</strong> and <strong>${escapeHtml(getCharacterNameById(npcId) || "NPC")}</strong>.</p><p>Do you want to continue it?</p>`,
+    {
+      okButton: "Continue Scene",
+      cancelButton: false,
+      customButtons: [
+        {
+          text: "Start New Scene",
+          result: context.POPUP_RESULT.CUSTOM1,
+          classes: ["menu_button"],
+          appendAtEnd: true,
+        },
+      ],
+      defaultResult: context.POPUP_RESULT.AFFIRMATIVE,
+    },
+  );
+
+  if (result === context.POPUP_RESULT.CUSTOM1) {
+    return {
+      chatFile: buildDirectSceneChatName(location, npcId),
+      isNew: true,
+    };
+  }
+
+  if (result !== context.POPUP_RESULT.AFFIRMATIVE) {
+    return null;
+  }
+
+  return {
+    chatFile: existingRecord.chatFile,
+    isNew: false,
+  };
+}
+
+async function openDirectScene(location, npcId) {
+  const context = getContext();
+  const characterIndex = findCharacterIndexByNpcId(npcId);
+
+  if (characterIndex < 0) {
+    toastr.error("Selected NPC could not be found.");
+    return false;
+  }
+
+  const target = await chooseDirectSceneChat(location, npcId);
+  if (!target?.chatFile) {
+    return false;
+  }
+
+  await context.selectCharacterById(characterIndex, { switchMenu: false });
+  await context.openCharacterChat(target.chatFile);
+
+  upsertSceneChatRecord(location.id, npcId, target.chatFile);
+  await persistSettings();
+
+  return true;
 }
 
 function getCheckedNpcIds(container) {
@@ -456,6 +630,16 @@ async function switchLocation(locationId) {
   if (location.chat_mode === CHAT_MODE.SELECT) {
     selectedNpcId = await openNpcSelectDialog(location);
     if (!selectedNpcId) {
+      return;
+    }
+  }
+
+  if (
+    location.chat_mode === CHAT_MODE.DIRECT ||
+    location.chat_mode === CHAT_MODE.SELECT
+  ) {
+    const opened = await openDirectScene(location, selectedNpcId);
+    if (!opened) {
       return;
     }
   }
