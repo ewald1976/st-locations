@@ -29,6 +29,8 @@ Each location stores:
 - `name`
 - `description`
 - `npcs`
+- `chat_mode`
+- `primary_npc`
 
 The active scene is stored per chat in chat metadata:
 
@@ -47,10 +49,27 @@ The active scene is stored per chat in chat metadata:
 
 1. Click `Manage Locations`.
 2. Create or edit a location in the popup.
-3. Select NPCs from existing character cards and click `Save`.
+3. Select NPCs, set the interaction mode, and choose a primary NPC when using `Direct`.
 4. Click `Start Scene` in the drawer to set the active location for the current chat.
 5. The active description appears above as readable scene context.
 
-## v0 Note
+## Interaction Modes
 
-This plugin only stores structured scene metadata and shows the active context. It does not inject prompts and does not automatically modify group or chat logic.
+- `Direct`: opens the scene through one primary NPC
+- `Group`: intended for group chat entry with all NPCs
+- `Select`: intended for choosing an NPC when entering the scene
+
+Defaults:
+
+- `1 NPC -> Direct`
+- `2+ NPCs -> Select`
+
+Validation:
+
+- `Direct` requires `primary_npc`, and it must be part of `npcs`
+- `Group` requires at least 2 NPCs
+- `Select` requires at least 1 NPC
+
+## v0.2 Note
+
+This plugin now stores scene entry metadata in addition to scene context. It still does not inject prompts and does not yet create or manage SillyTavern chats automatically.

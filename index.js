@@ -11,6 +11,12 @@ const DEFAULT_SCENE = Object.freeze({
   locationSnapshot: null,
 });
 
+const CHAT_MODE = Object.freeze({
+  DIRECT: "direct",
+  GROUP: "group",
+  SELECT: "select",
+});
+
 const dom = {
   root: null,
   activeScene: null,
@@ -26,6 +32,8 @@ const popupState = {
   formId: null,
   formName: null,
   formDescription: null,
+  formChatMode: null,
+  formPrimaryNpc: null,
   npcList: null,
   saveButton: null,
   cancelButton: null,
@@ -102,13 +110,56 @@ function normalizeLocation(location) {
   const npcs = Array.isArray(location.npcs)
     ? location.npcs.map((npcId) => String(npcId)).filter(Boolean)
     : [];
+  const uniqueNpcs = [...new Set(npcs)];
+  const defaultChatMode =
+    uniqueNpcs.length <= 1 ? CHAT_MODE.DIRECT : CHAT_MODE.SELECT;
+  const chatMode = Object.values(CHAT_MODE).includes(location.chat_mode)
+    ? location.chat_mode
+    : defaultChatMode;
+  const primaryNpc =
+    typeof location.primary_npc === "string" &&
+    uniqueNpcs.includes(location.primary_npc)
+      ? location.primary_npc
+      : uniqueNpcs[0] || null;
 
   return {
     id: baseId,
     name,
     description,
-    npcs: [...new Set(npcs)],
+    npcs: uniqueNpcs,
+    chat_mode: chatMode,
+    primary_npc: chatMode === CHAT_MODE.DIRECT ? primaryNpc : null,
   };
+}
+
+function getDefaultChatMode(npcIds) {
+  return npcIds.length <= 1 ? CHAT_MODE.DIRECT : CHAT_MODE.SELECT;
+}
+
+function validateLocation(location) {
+  if (!location.name) {
+    return "Location name is required.";
+  }
+
+  if (!Array.isArray(location.npcs) || !location.npcs.length) {
+    return "At least one NPC is required.";
+  }
+
+  if (location.chat_mode === CHAT_MODE.DIRECT) {
+    if (!location.primary_npc) {
+      return "Primary NPC is required for direct mode.";
+    }
+
+    if (!location.npcs.includes(location.primary_npc)) {
+      return "Primary NPC must be part of the location NPC list.";
+    }
+  }
+
+  if (location.chat_mode === CHAT_MODE.GROUP && location.npcs.length < 2) {
+    return "Group mode requires at least two NPCs.";
+  }
+
+  return null;
 }
 
 function dedupeId(baseId, ignoreId = null) {
@@ -177,6 +228,8 @@ function clearPopupRefs() {
   popupState.formId = null;
   popupState.formName = null;
   popupState.formDescription = null;
+  popupState.formChatMode = null;
+  popupState.formPrimaryNpc = null;
   popupState.npcList = null;
   popupState.saveButton = null;
   popupState.cancelButton = null;
@@ -192,6 +245,9 @@ function resetPopupForm() {
   popupState.formId.value = "";
   popupState.formName.value = "";
   popupState.formDescription.value = "";
+  popupState.formChatMode.value = CHAT_MODE.DIRECT;
+  popupState.formPrimaryNpc.innerHTML = '<option value="">No NPC available</option>';
+  popupState.formPrimaryNpc.value = "";
 
   for (const input of popupState.npcList.querySelectorAll(
     'input[type="checkbox"]',
@@ -217,6 +273,7 @@ function populatePopupForm(locationId) {
   popupState.formId.value = location.id;
   popupState.formName.value = location.name;
   popupState.formDescription.value = location.description;
+  popupState.formChatMode.value = location.chat_mode;
 
   const selectedIds = new Set(location.npcs);
   for (const input of popupState.npcList.querySelectorAll(
@@ -224,6 +281,8 @@ function populatePopupForm(locationId) {
   )) {
     input.checked = selectedIds.has(input.value);
   }
+
+  updateInteractionModeUI(location.primary_npc);
 
   popupState.deleteButton.disabled = false;
 }
@@ -245,19 +304,25 @@ async function saveLocationFromPopup() {
   const existingId = popupState.formId.value || null;
   const name = popupState.formName.value.trim();
   const description = popupState.formDescription.value.trim();
-
-  if (!name) {
-    toastr.warning("Location name is required.");
-    return;
-  }
+  const npcs = [...new Set(getCheckedNpcIds(popupState.npcList))];
+  const chatMode = popupState.formChatMode.value || getDefaultChatMode(npcs);
+  const primaryNpc =
+    chatMode === CHAT_MODE.DIRECT ? popupState.formPrimaryNpc.value || null : null;
 
   const createdId = existingId || dedupeId(slugify(name) || "location");
   const location = {
     id: createdId,
     name,
     description,
-    npcs: [...new Set(getCheckedNpcIds(popupState.npcList))],
+    npcs,
+    chat_mode: chatMode,
+    primary_npc: primaryNpc,
   };
+  const validationError = validateLocation(location);
+  if (validationError) {
+    toastr.warning(validationError);
+    return;
+  }
 
   const existingIndex = settings.locations.findIndex(
     (item) => item.id === existingId,
@@ -360,12 +425,23 @@ function renderActiveScene() {
     .filter((option) => location.npcs.includes(option.id))
     .map((option) => option.name);
   const sceneContext = location.description || "No description set.";
+  const modeLabel =
+    location.chat_mode === CHAT_MODE.DIRECT
+      ? "Direct"
+      : location.chat_mode === CHAT_MODE.GROUP
+        ? "Group"
+        : "Select";
+  const primaryNpcName =
+    getCharacterOptions().find((option) => option.id === location.primary_npc)
+      ?.name || "None";
 
   dom.activeScene.classList.remove("is-empty");
   dom.activeScene.innerHTML = `
         <div><span class="stlp__badge">Active</span> <strong>${escapeHtml(location.name)}</strong></div>
         <div>${escapeHtml(sceneContext)}</div>
         <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
+        <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
+        ${location.chat_mode === CHAT_MODE.DIRECT ? `<div class="stlp__meta">Primary NPC: ${escapeHtml(primaryNpcName)}</div>` : ""}
         <div class="stlp__meta">Scene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
         <div class="stlp__meta">Scene started: ${escapeHtml(scene.sceneStartedAt || "Not started yet")}</div>
     `;
@@ -388,6 +464,12 @@ function renderLocationList() {
       const npcNames = characters
         .filter((character) => location.npcs.includes(character.id))
         .map((character) => character.name);
+      const modeLabel =
+        location.chat_mode === CHAT_MODE.DIRECT
+          ? "Direct"
+          : location.chat_mode === CHAT_MODE.GROUP
+            ? "Group"
+            : "Select";
 
       return `
                 <div class="stlp__location-card">
@@ -400,6 +482,7 @@ function renderLocationList() {
                     </div>
                     <div class="stlp__location-description">${escapeHtml(location.description || "No description set.")}</div>
                     <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
+                    <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
                     <div class="stlp__location-actions">
                         <button type="button" class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
                         <button type="button" class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>
@@ -456,6 +539,50 @@ function renderPopupNpcOptions(selectedIds = []) {
     .join("");
 }
 
+function renderPrimaryNpcOptions(selectedNpcIds, preferredNpcId = "") {
+  const characters = getCharacterOptions().filter((character) =>
+    selectedNpcIds.includes(character.id),
+  );
+
+  const preferred =
+    characters.find((character) => character.id === preferredNpcId)?.id ||
+    characters[0]?.id ||
+    "";
+
+  popupState.formPrimaryNpc.innerHTML = characters.length
+    ? characters
+        .map(
+          (character) => `
+                <option value="${escapeHtml(character.id)}" ${character.id === preferred ? "selected" : ""}>${escapeHtml(character.name)}</option>
+            `,
+        )
+        .join("")
+    : '<option value="">No NPC available</option>';
+
+  popupState.formPrimaryNpc.value = preferred;
+}
+
+function updateInteractionModeUI(preferredNpcId = "") {
+  if (!popupState.root) {
+    return;
+  }
+
+  const selectedNpcIds = getCheckedNpcIds(popupState.npcList);
+  const chatMode = popupState.formChatMode.value;
+
+  renderPrimaryNpcOptions(
+    selectedNpcIds,
+    preferredNpcId || popupState.formPrimaryNpc.value,
+  );
+
+  const primaryNpcRow = popupState.root.querySelector(".stlp-primary-npc-row");
+  primaryNpcRow.hidden = chatMode !== CHAT_MODE.DIRECT;
+
+  if (chatMode !== CHAT_MODE.DIRECT) {
+    popupState.formPrimaryNpc.value = "";
+  }
+}
+
 function renderManagePopup() {
   if (!popupState.root) {
     return;
@@ -475,6 +602,12 @@ function renderManagePopup() {
         const npcNames = characters
           .filter((character) => location.npcs.includes(character.id))
           .map((character) => character.name);
+        const modeLabel =
+          location.chat_mode === CHAT_MODE.DIRECT
+            ? "Direct"
+            : location.chat_mode === CHAT_MODE.GROUP
+              ? "Group"
+              : "Select";
 
         return `
                 <div class="stlp__popup-location ${editingId === location.id ? "is-selected" : ""}">
@@ -482,6 +615,7 @@ function renderManagePopup() {
                         <div>
                             <div class="stlp__location-name">${escapeHtml(location.name)}</div>
                             <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
+                            <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
                         </div>
                         ${activeId === location.id ? '<span class="stlp__badge">Active</span>' : ""}
                     </div>
@@ -500,6 +634,7 @@ function renderManagePopup() {
       ? findLocation(editingId).npcs
       : getCheckedNpcIds(popupState.npcList);
   renderPopupNpcOptions(selectedIds);
+  updateInteractionModeUI(editingId ? findLocation(editingId)?.primary_npc : "");
   bindPopupActions();
 }
 
@@ -510,10 +645,12 @@ function bindPopupActions() {
 
   popupState.newButton.onclick = () => {
     resetPopupForm();
+    updateInteractionModeUI();
     renderManagePopup();
   };
   popupState.cancelButton.onclick = () => {
     resetPopupForm();
+    updateInteractionModeUI();
     renderManagePopup();
   };
   popupState.saveButton.onclick = () => void saveLocationFromPopup();
@@ -529,6 +666,22 @@ function bindPopupActions() {
 
   for (const button of popupState.list.querySelectorAll(".stlp-popup-delete")) {
     button.onclick = () => void deleteLocationById(button.dataset.locationId);
+  }
+
+  popupState.formChatMode.onchange = () => updateInteractionModeUI();
+  popupState.formPrimaryNpc.onchange = () => updateInteractionModeUI();
+
+  for (const input of popupState.npcList.querySelectorAll('input[type="checkbox"]')) {
+    input.onchange = () => {
+      const selectedNpcIds = getCheckedNpcIds(popupState.npcList);
+      const fallbackMode = getDefaultChatMode(selectedNpcIds);
+
+      if (!popupState.formId.value && popupState.formChatMode.value !== CHAT_MODE.GROUP) {
+        popupState.formChatMode.value = fallbackMode;
+      }
+
+      updateInteractionModeUI();
+    };
   }
 }
 
@@ -554,6 +707,16 @@ function buildManagePopupContent() {
                     rows="4"
                     placeholder="A warm, noisy tavern filled with conversation and the smell of beer."
                 ></textarea>
+                <label class="stlp__label" for="stlp-popup-chat-mode">Interaction Mode</label>
+                <select id="stlp-popup-chat-mode" class="text_pole stlp-popup-chat-mode">
+                    <option value="direct">Direct</option>
+                    <option value="group">Group</option>
+                    <option value="select">Select</option>
+                </select>
+                <div class="stlp-primary-npc-row">
+                    <label class="stlp__label" for="stlp-popup-primary-npc">Primary NPC</label>
+                    <select id="stlp-popup-primary-npc" class="text_pole stlp-popup-primary-npc"></select>
+                </div>
                 <div class="stlp__label">Select NPCs</div>
                 <div class="stlp__npc-list stlp-popup-npcs"></div>
                 <div class="stlp__actions">
@@ -572,6 +735,8 @@ function buildManagePopupContent() {
   popupState.formDescription = wrapper.querySelector(
     ".stlp-popup-location-description",
   );
+  popupState.formChatMode = wrapper.querySelector(".stlp-popup-chat-mode");
+  popupState.formPrimaryNpc = wrapper.querySelector(".stlp-popup-primary-npc");
   popupState.npcList = wrapper.querySelector(".stlp-popup-npcs");
   popupState.saveButton = wrapper.querySelector(".stlp-popup-save");
   popupState.cancelButton = wrapper.querySelector(".stlp-popup-cancel");
