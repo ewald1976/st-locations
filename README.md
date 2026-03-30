@@ -39,7 +39,7 @@ Die aktive Szene wird chat-spezifisch in den Chat-Metadaten gehalten:
 
 ## Installation
 
-1. Diesen Ordner nach `SillyTavern/data/default-user/extensions/third-party/ST-Location` kopieren.
+1. Diesen Ordner nach `SillyTavern/data/default-user/extensions/third-party/st-locations` kopieren.
 2. SillyTavern neu laden.
 3. Im Extensions-Bereich den Drawer `Location Plugin` oeffnen.
 

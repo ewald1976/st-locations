@@ -425,7 +425,7 @@ async function mountSettings() {
   }
 
   const html = await getContext().renderExtensionTemplateAsync(
-    "third-party/ST-Location",
+    "third-party/st-locations",
     "settings",
   );
   settingsHost.insertAdjacentHTML("beforeend", html);
