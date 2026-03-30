@@ -44,8 +44,35 @@ const popupState = {
   newButton: null,
 };
 
+const runtimeState = {
+  eventsBound: false,
+  refreshTimeoutId: null,
+};
+
 function getContext() {
   return SillyTavern.getContext();
+}
+
+function refreshUi() {
+  if (!dom.root) {
+    return;
+  }
+
+  render();
+  if (popupState.root) {
+    renderManagePopup();
+  }
+}
+
+function scheduleRefresh(delay = 0) {
+  if (runtimeState.refreshTimeoutId) {
+    window.clearTimeout(runtimeState.refreshTimeoutId);
+  }
+
+  runtimeState.refreshTimeoutId = window.setTimeout(() => {
+    runtimeState.refreshTimeoutId = null;
+    refreshUi();
+  }, delay);
 }
 
 function getSettings() {
@@ -1348,8 +1375,38 @@ async function mountSettings() {
 
   dom.manageButton.addEventListener("click", () => void openManageLocationsPopup());
 
-  render();
+  refreshUi();
   return true;
+}
+
+function bindContextEvents() {
+  if (runtimeState.eventsBound) {
+    return;
+  }
+
+  const context = getContext();
+  const { eventSource, eventTypes } = context;
+
+  const refreshEvents = [
+    eventTypes.APP_READY,
+    eventTypes.CHAT_CHANGED,
+    eventTypes.CHAT_LOADED,
+    eventTypes.GROUP_UPDATED,
+    eventTypes.CHARACTER_PAGE_LOADED,
+    eventTypes.CHARACTER_EDITED,
+    eventTypes.CHARACTER_DELETED,
+    eventTypes.CHARACTER_DUPLICATED,
+    eventTypes.CHARACTER_RENAMED,
+  ];
+
+  for (const eventType of refreshEvents) {
+    eventSource.on(eventType, () => scheduleRefresh());
+  }
+
+  eventSource.on(eventTypes.EXTENSION_SETTINGS_LOADED, () => scheduleRefresh());
+  eventSource.on(eventTypes.SETTINGS_LOADED, () => scheduleRefresh(50));
+
+  runtimeState.eventsBound = true;
 }
 
 async function waitForSettingsHost() {
@@ -1367,21 +1424,14 @@ async function waitForSettingsHost() {
 }
 
 waitForSettingsHost();
+bindContextEvents();
 
 window.addEventListener("focus", () => {
-  if (dom.root) {
-    render();
-    if (popupState.root) {
-      renderManagePopup();
-    }
-  }
+  scheduleRefresh();
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && dom.root) {
-    render();
-    if (popupState.root) {
-      renderManagePopup();
-    }
+  if (!document.hidden) {
+    scheduleRefresh();
   }
 });
