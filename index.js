@@ -1,439 +1,480 @@
-const MODULE_NAME = 'st_location_plugin';
+const MODULE_NAME = "st_locations";
 
 const DEFAULT_SETTINGS = Object.freeze({
-    locations: [],
+  locations: [],
 });
 
 const DEFAULT_SCENE = Object.freeze({
-    currentLocationId: null,
-    sceneStartedAt: null,
-    sceneCounter: 0,
-    locationSnapshot: null,
+  currentLocationId: null,
+  sceneStartedAt: null,
+  sceneCounter: 0,
+  locationSnapshot: null,
 });
 
 const dom = {
-    root: null,
-    activeScene: null,
-    locationList: null,
-    npcList: null,
-    formId: null,
-    formName: null,
-    formDescription: null,
-    saveButton: null,
-    resetButton: null,
-    deleteButton: null,
-    sceneContext: null,
+  root: null,
+  activeScene: null,
+  locationList: null,
+  npcList: null,
+  formId: null,
+  formName: null,
+  formDescription: null,
+  saveButton: null,
+  resetButton: null,
+  deleteButton: null,
+  sceneContext: null,
 };
 
 function getContext() {
-    return SillyTavern.getContext();
+  return SillyTavern.getContext();
 }
 
 function getSettings() {
-    const { extensionSettings } = getContext();
+  const { extensionSettings } = getContext();
 
-    if (!extensionSettings[MODULE_NAME]) {
-        extensionSettings[MODULE_NAME] = structuredClone(DEFAULT_SETTINGS);
+  if (!extensionSettings[MODULE_NAME]) {
+    extensionSettings[MODULE_NAME] = structuredClone(DEFAULT_SETTINGS);
+  }
+
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
+      extensionSettings[MODULE_NAME][key] = structuredClone(
+        DEFAULT_SETTINGS[key],
+      );
     }
+  }
 
-    for (const key of Object.keys(DEFAULT_SETTINGS)) {
-        if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
-            extensionSettings[MODULE_NAME][key] = structuredClone(DEFAULT_SETTINGS[key]);
-        }
-    }
+  if (!Array.isArray(extensionSettings[MODULE_NAME].locations)) {
+    extensionSettings[MODULE_NAME].locations = [];
+  }
 
-    if (!Array.isArray(extensionSettings[MODULE_NAME].locations)) {
-        extensionSettings[MODULE_NAME].locations = [];
-    }
+  extensionSettings[MODULE_NAME].locations = extensionSettings[
+    MODULE_NAME
+  ].locations
+    .map(normalizeLocation)
+    .filter(Boolean);
 
-    extensionSettings[MODULE_NAME].locations = extensionSettings[MODULE_NAME].locations
-        .map(normalizeLocation)
-        .filter(Boolean);
-
-    return extensionSettings[MODULE_NAME];
+  return extensionSettings[MODULE_NAME];
 }
 
 function getSceneState() {
-    const context = getContext();
+  const context = getContext();
 
-    if (!context.chatMetadata[MODULE_NAME]) {
-        context.chatMetadata[MODULE_NAME] = structuredClone(DEFAULT_SCENE);
+  if (!context.chatMetadata[MODULE_NAME]) {
+    context.chatMetadata[MODULE_NAME] = structuredClone(DEFAULT_SCENE);
+  }
+
+  for (const key of Object.keys(DEFAULT_SCENE)) {
+    if (!Object.hasOwn(context.chatMetadata[MODULE_NAME], key)) {
+      context.chatMetadata[MODULE_NAME][key] = structuredClone(
+        DEFAULT_SCENE[key],
+      );
     }
+  }
 
-    for (const key of Object.keys(DEFAULT_SCENE)) {
-        if (!Object.hasOwn(context.chatMetadata[MODULE_NAME], key)) {
-            context.chatMetadata[MODULE_NAME][key] = structuredClone(DEFAULT_SCENE[key]);
-        }
-    }
-
-    return context.chatMetadata[MODULE_NAME];
+  return context.chatMetadata[MODULE_NAME];
 }
 
 function slugify(value) {
-    return String(value || '')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function normalizeLocation(location) {
-    if (!location || typeof location !== 'object') {
-        return null;
-    }
+  if (!location || typeof location !== "object") {
+    return null;
+  }
 
-    const name = String(location.name || '').trim();
-    const description = String(location.description || '').trim();
-    const baseId = slugify(location.id || name) || 'location';
-    const npcs = Array.isArray(location.npcs)
-        ? location.npcs.map((npcId) => String(npcId)).filter(Boolean)
-        : [];
+  const name = String(location.name || "").trim();
+  const description = String(location.description || "").trim();
+  const baseId = slugify(location.id || name) || "location";
+  const npcs = Array.isArray(location.npcs)
+    ? location.npcs.map((npcId) => String(npcId)).filter(Boolean)
+    : [];
 
-    return {
-        id: baseId,
-        name,
-        description,
-        npcs: [...new Set(npcs)],
-    };
+  return {
+    id: baseId,
+    name,
+    description,
+    npcs: [...new Set(npcs)],
+  };
 }
 
 function dedupeId(baseId, ignoreId = null) {
-    const { locations } = getSettings();
-    let candidate = baseId || 'location';
-    let index = 2;
+  const { locations } = getSettings();
+  let candidate = baseId || "location";
+  let index = 2;
 
-    while (locations.some((location) => location.id === candidate && location.id !== ignoreId)) {
-        candidate = `${baseId}-${index}`;
-        index += 1;
-    }
+  while (
+    locations.some(
+      (location) => location.id === candidate && location.id !== ignoreId,
+    )
+  ) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
 
-    return candidate;
+  return candidate;
 }
 
 function getCharacterOptions() {
-    const { characters } = getContext();
+  const { characters } = getContext();
 
-    return (Array.isArray(characters) ? characters : [])
-        .map((character, index) => {
-            const id = String(character.avatar || character.name || index);
-            const name = character.name || `Character ${index + 1}`;
-            return { id, name };
-        })
-        .filter((item, index, list) => list.findIndex((other) => other.id === item.id) === index)
-        .sort((a, b) => a.name.localeCompare(b.name));
+  return (Array.isArray(characters) ? characters : [])
+    .map((character, index) => {
+      const id = String(character.avatar || character.name || index);
+      const name = character.name || `Character ${index + 1}`;
+      return { id, name };
+    })
+    .filter(
+      (item, index, list) =>
+        list.findIndex((other) => other.id === item.id) === index,
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function escapeHtml(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function findLocation(locationId) {
-    return getSettings().locations.find((location) => location.id === locationId) || null;
+  return (
+    getSettings().locations.find((location) => location.id === locationId) ||
+    null
+  );
 }
 
 function getSelectedNpcIds() {
-    return Array.from(dom.npcList.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
+  return Array.from(
+    dom.npcList.querySelectorAll('input[type="checkbox"]:checked'),
+  ).map((input) => input.value);
 }
 
 function resetForm() {
-    dom.formId.value = '';
-    dom.formName.value = '';
-    dom.formDescription.value = '';
+  dom.formId.value = "";
+  dom.formName.value = "";
+  dom.formDescription.value = "";
 
-    for (const input of dom.npcList.querySelectorAll('input[type="checkbox"]')) {
-        input.checked = false;
-    }
+  for (const input of dom.npcList.querySelectorAll('input[type="checkbox"]')) {
+    input.checked = false;
+  }
 
-    dom.deleteButton.disabled = true;
+  dom.deleteButton.disabled = true;
 }
 
 function populateForm(locationId) {
-    const location = findLocation(locationId);
+  const location = findLocation(locationId);
 
-    if (!location) {
-        resetForm();
-        return;
-    }
+  if (!location) {
+    resetForm();
+    return;
+  }
 
-    dom.formId.value = location.id;
-    dom.formName.value = location.name;
-    dom.formDescription.value = location.description;
+  dom.formId.value = location.id;
+  dom.formName.value = location.name;
+  dom.formDescription.value = location.description;
 
-    const selectedIds = new Set(location.npcs);
-    for (const input of dom.npcList.querySelectorAll('input[type="checkbox"]')) {
-        input.checked = selectedIds.has(input.value);
-    }
+  const selectedIds = new Set(location.npcs);
+  for (const input of dom.npcList.querySelectorAll('input[type="checkbox"]')) {
+    input.checked = selectedIds.has(input.value);
+  }
 
-    dom.deleteButton.disabled = false;
+  dom.deleteButton.disabled = false;
 }
 
 async function persistSettings() {
-    getContext().saveSettingsDebounced();
+  getContext().saveSettingsDebounced();
 }
 
 async function persistMetadata() {
-    await getContext().saveMetadata();
+  await getContext().saveMetadata();
 }
 
 async function saveLocation() {
-    const settings = getSettings();
-    const existingId = dom.formId.value || null;
-    const name = dom.formName.value.trim();
-    const description = dom.formDescription.value.trim();
+  const settings = getSettings();
+  const existingId = dom.formId.value || null;
+  const name = dom.formName.value.trim();
+  const description = dom.formDescription.value.trim();
 
-    if (!name) {
-        toastr.warning('Location Name ist erforderlich.');
-        return;
-    }
+  if (!name) {
+    toastr.warning("Location Name ist erforderlich.");
+    return;
+  }
 
-    const createdId = existingId || dedupeId(slugify(name) || 'location');
+  const createdId = existingId || dedupeId(slugify(name) || "location");
 
-    const location = {
-        id: createdId,
-        name,
-        description,
-        npcs: [...new Set(getSelectedNpcIds())],
-    };
+  const location = {
+    id: createdId,
+    name,
+    description,
+    npcs: [...new Set(getSelectedNpcIds())],
+  };
 
-    const existingIndex = settings.locations.findIndex((item) => item.id === existingId);
-    if (existingIndex >= 0) {
-        settings.locations[existingIndex] = location;
-    } else {
-        settings.locations.push(location);
-    }
+  const existingIndex = settings.locations.findIndex(
+    (item) => item.id === existingId,
+  );
+  if (existingIndex >= 0) {
+    settings.locations[existingIndex] = location;
+  } else {
+    settings.locations.push(location);
+  }
 
-    settings.locations.sort((a, b) => a.name.localeCompare(b.name));
+  settings.locations.sort((a, b) => a.name.localeCompare(b.name));
 
-    const scene = getSceneState();
-    if (scene.currentLocationId === existingId) {
-        scene.currentLocationId = location.id;
-        scene.locationSnapshot = structuredClone(location);
-        await persistMetadata();
-    }
+  const scene = getSceneState();
+  if (scene.currentLocationId === existingId) {
+    scene.currentLocationId = location.id;
+    scene.locationSnapshot = structuredClone(location);
+    await persistMetadata();
+  }
 
-    await persistSettings();
-    render();
-    populateForm(location.id);
-    toastr.success('Location gespeichert.');
+  await persistSettings();
+  render();
+  populateForm(location.id);
+  toastr.success("Location gespeichert.");
 }
 
 async function deleteLocation() {
-    const locationId = dom.formId.value;
-    if (!locationId) {
-        return;
-    }
+  const locationId = dom.formId.value;
+  if (!locationId) {
+    return;
+  }
 
-    const location = findLocation(locationId);
-    const confirmed = window.confirm(`Location wirklich löschen${location?.name ? `: ${location.name}` : ''}?`);
-    if (!confirmed) {
-        return;
-    }
+  const location = findLocation(locationId);
+  const confirmed = window.confirm(
+    `Location wirklich löschen${location?.name ? `: ${location.name}` : ""}?`,
+  );
+  if (!confirmed) {
+    return;
+  }
 
-    const settings = getSettings();
-    settings.locations = settings.locations.filter((location) => location.id !== locationId);
-    await persistSettings();
+  const settings = getSettings();
+  settings.locations = settings.locations.filter(
+    (location) => location.id !== locationId,
+  );
+  await persistSettings();
 
-    const scene = getSceneState();
-    if (scene.currentLocationId === locationId) {
-        Object.assign(scene, structuredClone(DEFAULT_SCENE));
-        await persistMetadata();
-    }
+  const scene = getSceneState();
+  if (scene.currentLocationId === locationId) {
+    Object.assign(scene, structuredClone(DEFAULT_SCENE));
+    await persistMetadata();
+  }
 
-    resetForm();
-    render();
-    toastr.success('Location gelöscht.');
+  resetForm();
+  render();
+  toastr.success("Location gelöscht.");
 }
 
 async function switchLocation(locationId) {
-    const location = findLocation(locationId);
-    if (!location) {
-        toastr.error('Location nicht gefunden.');
-        return;
-    }
+  const location = findLocation(locationId);
+  if (!location) {
+    toastr.error("Location nicht gefunden.");
+    return;
+  }
 
-    const scene = getSceneState();
-    scene.currentLocationId = location.id;
-    scene.sceneStartedAt = new Date().toISOString();
-    scene.sceneCounter = Number(scene.sceneCounter || 0) + 1;
-    scene.locationSnapshot = structuredClone(location);
+  const scene = getSceneState();
+  scene.currentLocationId = location.id;
+  scene.sceneStartedAt = new Date().toISOString();
+  scene.sceneCounter = Number(scene.sceneCounter || 0) + 1;
+  scene.locationSnapshot = structuredClone(location);
 
-    await persistMetadata();
-    render();
-    toastr.success(`Szene gestartet: ${location.name}`);
+  await persistMetadata();
+  render();
+  toastr.success(`Szene gestartet: ${location.name}`);
 }
 
 function renderNpcOptions() {
-    const options = getCharacterOptions();
+  const options = getCharacterOptions();
 
-    if (!options.length) {
-        dom.npcList.innerHTML = '<div class="stlp__empty">Keine Character Cards gefunden.</div>';
-        return;
-    }
+  if (!options.length) {
+    dom.npcList.innerHTML =
+      '<div class="stlp__empty">Keine Character Cards gefunden.</div>';
+    return;
+  }
 
-    const selectedIds = new Set(getSelectedNpcIds());
-    dom.npcList.innerHTML = options
-        .map((option) => `
+  const selectedIds = new Set(getSelectedNpcIds());
+  dom.npcList.innerHTML = options
+    .map(
+      (option) => `
             <label class="stlp__npc-item">
-                <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.has(option.id) ? 'checked' : ''} />
+                <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.has(option.id) ? "checked" : ""} />
                 <span>${escapeHtml(option.name)}</span>
             </label>
-        `)
-        .join('');
+        `,
+    )
+    .join("");
 }
 
 function renderActiveScene() {
-    const scene = getSceneState();
-    const location = scene.locationSnapshot || findLocation(scene.currentLocationId);
+  const scene = getSceneState();
+  const location =
+    scene.locationSnapshot || findLocation(scene.currentLocationId);
 
-    if (!location) {
-        dom.activeScene.classList.add('is-empty');
-        dom.activeScene.innerHTML = '<div>Keine aktive Location in diesem Chat.</div>';
-        if (dom.sceneContext) {
-            dom.sceneContext.value = '';
-        }
-        return;
+  if (!location) {
+    dom.activeScene.classList.add("is-empty");
+    dom.activeScene.innerHTML =
+      "<div>Keine aktive Location in diesem Chat.</div>";
+    if (dom.sceneContext) {
+      dom.sceneContext.value = "";
     }
+    return;
+  }
 
-    const npcNames = getCharacterOptions()
-        .filter((option) => location.npcs.includes(option.id))
-        .map((option) => option.name);
-    const sceneContext = location.description || 'Keine Description gesetzt.';
+  const npcNames = getCharacterOptions()
+    .filter((option) => location.npcs.includes(option.id))
+    .map((option) => option.name);
+  const sceneContext = location.description || "Keine Description gesetzt.";
 
-    dom.activeScene.classList.remove('is-empty');
-    dom.activeScene.innerHTML = `
+  dom.activeScene.classList.remove("is-empty");
+  dom.activeScene.innerHTML = `
         <div><span class="stlp__badge">Aktiv</span> <strong>${escapeHtml(location.name)}</strong></div>
         <div>${escapeHtml(sceneContext)}</div>
-        <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(', ') || 'Keine')}</div>
+        <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "Keine")}</div>
         <div class="stlp__meta">Szene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
-        <div class="stlp__meta">Szenenstart: ${escapeHtml(scene.sceneStartedAt || 'Noch nicht gestartet')}</div>
+        <div class="stlp__meta">Szenenstart: ${escapeHtml(scene.sceneStartedAt || "Noch nicht gestartet")}</div>
     `;
 
-    if (dom.sceneContext) {
-        dom.sceneContext.value = sceneContext;
-    }
+  if (dom.sceneContext) {
+    dom.sceneContext.value = sceneContext;
+  }
 }
 
 function renderLocationList() {
-    const settings = getSettings();
-    const activeId = getSceneState().currentLocationId;
-    const characters = getCharacterOptions();
+  const settings = getSettings();
+  const activeId = getSceneState().currentLocationId;
+  const characters = getCharacterOptions();
 
-    if (!settings.locations.length) {
-        dom.locationList.innerHTML = '<div class="stlp__empty">Noch keine Locations angelegt.</div>';
-        return;
-    }
+  if (!settings.locations.length) {
+    dom.locationList.innerHTML =
+      '<div class="stlp__empty">Noch keine Locations angelegt.</div>';
+    return;
+  }
 
-    dom.locationList.innerHTML = settings.locations
-        .map((location) => {
-            const npcNames = characters
-                .filter((character) => location.npcs.includes(character.id))
-                .map((character) => character.name);
+  dom.locationList.innerHTML = settings.locations
+    .map((location) => {
+      const npcNames = characters
+        .filter((character) => location.npcs.includes(character.id))
+        .map((character) => character.name);
 
-            return `
+      return `
                 <div class="stlp__location-card">
                     <div class="stlp__location-top">
                         <div>
                             <div class="stlp__location-name">${escapeHtml(location.name)}</div>
                             <div class="stlp__location-id">${escapeHtml(location.id)}</div>
                         </div>
-                        ${activeId === location.id ? '<span class="stlp__badge">Aktive Szene</span>' : ''}
+                        ${activeId === location.id ? '<span class="stlp__badge">Aktive Szene</span>' : ""}
                     </div>
-                    <div class="stlp__location-description">${escapeHtml(location.description || 'Keine Description gesetzt.')}</div>
-                    <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(', ') || 'Keine')}</div>
+                    <div class="stlp__location-description">${escapeHtml(location.description || "Keine Description gesetzt.")}</div>
+                    <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "Keine")}</div>
                     <div class="stlp__location-actions">
                         <button class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
                         <button class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>
                     </div>
                 </div>
             `;
-        })
-        .join('');
+    })
+    .join("");
 }
 
 function bindDynamicActions() {
-    for (const button of dom.locationList.querySelectorAll('.stlp-edit-location')) {
-        button.addEventListener('click', () => populateForm(button.dataset.locationId));
-    }
+  for (const button of dom.locationList.querySelectorAll(
+    ".stlp-edit-location",
+  )) {
+    button.addEventListener("click", () =>
+      populateForm(button.dataset.locationId),
+    );
+  }
 
-    for (const button of dom.locationList.querySelectorAll('.stlp-switch-location')) {
-        button.addEventListener('click', () => switchLocation(button.dataset.locationId));
-    }
+  for (const button of dom.locationList.querySelectorAll(
+    ".stlp-switch-location",
+  )) {
+    button.addEventListener("click", () =>
+      switchLocation(button.dataset.locationId),
+    );
+  }
 }
 
 function render() {
-    renderNpcOptions();
-    renderActiveScene();
-    renderLocationList();
-    bindDynamicActions();
+  renderNpcOptions();
+  renderActiveScene();
+  renderLocationList();
+  bindDynamicActions();
 
-    if (dom.sceneContext && !getSceneState().currentLocationId) {
-        dom.sceneContext.value = '';
-    }
+  if (dom.sceneContext && !getSceneState().currentLocationId) {
+    dom.sceneContext.value = "";
+  }
 }
 
 async function mountSettings() {
-    if (document.getElementById('st-location-plugin')) {
-        return true;
-    }
-
-    const settingsHost = document.getElementById('extensions_settings2');
-    if (!settingsHost) {
-        return false;
-    }
-
-    const html = await getContext().renderExtensionTemplateAsync('third-party/ST-Location', 'settings');
-    settingsHost.insertAdjacentHTML('beforeend', html);
-
-    dom.root = document.getElementById('st-location-plugin');
-    dom.activeScene = document.getElementById('stlp-active-scene');
-    dom.locationList = document.getElementById('stlp-location-list');
-    dom.npcList = document.getElementById('stlp-npc-list');
-    dom.formId = document.getElementById('stlp-location-id');
-    dom.formName = document.getElementById('stlp-location-name');
-    dom.formDescription = document.getElementById('stlp-location-description');
-    dom.saveButton = document.getElementById('stlp-save-location');
-    dom.resetButton = document.getElementById('stlp-reset-form');
-    dom.deleteButton = document.getElementById('stlp-delete-location');
-    dom.sceneContext = document.getElementById('stlp-scene-context');
-
-    dom.saveButton.addEventListener('click', saveLocation);
-    dom.resetButton.addEventListener('click', resetForm);
-    dom.deleteButton.addEventListener('click', deleteLocation);
-
-    render();
-    resetForm();
+  if (document.getElementById("st-location-plugin")) {
     return true;
+  }
+
+  const settingsHost = document.getElementById("extensions_settings2");
+  if (!settingsHost) {
+    return false;
+  }
+
+  const html = await getContext().renderExtensionTemplateAsync(
+    "third-party/ST-Location",
+    "settings",
+  );
+  settingsHost.insertAdjacentHTML("beforeend", html);
+
+  dom.root = document.getElementById("st-location-plugin");
+  dom.activeScene = document.getElementById("stlp-active-scene");
+  dom.locationList = document.getElementById("stlp-location-list");
+  dom.npcList = document.getElementById("stlp-npc-list");
+  dom.formId = document.getElementById("stlp-location-id");
+  dom.formName = document.getElementById("stlp-location-name");
+  dom.formDescription = document.getElementById("stlp-location-description");
+  dom.saveButton = document.getElementById("stlp-save-location");
+  dom.resetButton = document.getElementById("stlp-reset-form");
+  dom.deleteButton = document.getElementById("stlp-delete-location");
+  dom.sceneContext = document.getElementById("stlp-scene-context");
+
+  dom.saveButton.addEventListener("click", saveLocation);
+  dom.resetButton.addEventListener("click", resetForm);
+  dom.deleteButton.addEventListener("click", deleteLocation);
+
+  render();
+  resetForm();
+  return true;
 }
 
 async function waitForSettingsHost() {
+  if (await mountSettings()) {
+    return;
+  }
+
+  const observer = new MutationObserver(async () => {
     if (await mountSettings()) {
-        return;
+      observer.disconnect();
     }
+  });
 
-    const observer = new MutationObserver(async () => {
-        if (await mountSettings()) {
-            observer.disconnect();
-        }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 waitForSettingsHost();
 
-window.addEventListener('focus', () => {
-    if (dom.root) {
-        render();
-    }
+window.addEventListener("focus", () => {
+  if (dom.root) {
+    render();
+  }
 });
 
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && dom.root) {
-        render();
-    }
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && dom.root) {
+    render();
+  }
 });

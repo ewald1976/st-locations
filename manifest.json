@@ -6,9 +6,9 @@
   "dependencies": [],
   "js": "index.js",
   "css": "style.css",
-  "author": "Elmar Leirich",
+  "author": "ewald1976",
   "version": "0.1.0",
-  "homePage": "https://github.com/elmarleirich/st-location-plugin",
+  "homePage": "https://github.com/elmarleirich/st-locations",
   "auto_update": false,
   "minimum_client_version": "1.12.0"
 }
