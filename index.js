@@ -205,7 +205,7 @@ async function saveLocation() {
   const description = dom.formDescription.value.trim();
 
   if (!name) {
-    toastr.warning("Location Name ist erforderlich.");
+    toastr.warning("Location name is required.");
     return;
   }
 
@@ -239,7 +239,7 @@ async function saveLocation() {
   await persistSettings();
   render();
   populateForm(location.id);
-  toastr.success("Location gespeichert.");
+  toastr.success("Location saved.");
 }
 
 async function deleteLocation() {
@@ -250,7 +250,7 @@ async function deleteLocation() {
 
   const location = findLocation(locationId);
   const confirmed = window.confirm(
-    `Location wirklich löschen${location?.name ? `: ${location.name}` : ""}?`,
+    `Delete location${location?.name ? `: ${location.name}` : ""}?`,
   );
   if (!confirmed) {
     return;
@@ -270,13 +270,13 @@ async function deleteLocation() {
 
   resetForm();
   render();
-  toastr.success("Location gelöscht.");
+  toastr.success("Location deleted.");
 }
 
 async function switchLocation(locationId) {
   const location = findLocation(locationId);
   if (!location) {
-    toastr.error("Location nicht gefunden.");
+    toastr.error("Location not found.");
     return;
   }
 
@@ -288,7 +288,7 @@ async function switchLocation(locationId) {
 
   await persistMetadata();
   render();
-  toastr.success(`Szene gestartet: ${location.name}`);
+  toastr.success(`Scene started: ${location.name}`);
 }
 
 function renderNpcOptions() {
@@ -296,7 +296,7 @@ function renderNpcOptions() {
 
   if (!options.length) {
     dom.npcList.innerHTML =
-      '<div class="stlp__empty">Keine Character Cards gefunden.</div>';
+      '<div class="stlp__empty">No character cards found.</div>';
     return;
   }
 
@@ -321,7 +321,7 @@ function renderActiveScene() {
   if (!location) {
     dom.activeScene.classList.add("is-empty");
     dom.activeScene.innerHTML =
-      "<div>Keine aktive Location in diesem Chat.</div>";
+      "<div>No active location in this chat.</div>";
     if (dom.sceneContext) {
       dom.sceneContext.value = "";
     }
@@ -331,15 +331,15 @@ function renderActiveScene() {
   const npcNames = getCharacterOptions()
     .filter((option) => location.npcs.includes(option.id))
     .map((option) => option.name);
-  const sceneContext = location.description || "Keine Description gesetzt.";
+  const sceneContext = location.description || "No description set.";
 
   dom.activeScene.classList.remove("is-empty");
   dom.activeScene.innerHTML = `
-        <div><span class="stlp__badge">Aktiv</span> <strong>${escapeHtml(location.name)}</strong></div>
+        <div><span class="stlp__badge">Active</span> <strong>${escapeHtml(location.name)}</strong></div>
         <div>${escapeHtml(sceneContext)}</div>
-        <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "Keine")}</div>
-        <div class="stlp__meta">Szene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
-        <div class="stlp__meta">Szenenstart: ${escapeHtml(scene.sceneStartedAt || "Noch nicht gestartet")}</div>
+        <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
+        <div class="stlp__meta">Scene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
+        <div class="stlp__meta">Scene started: ${escapeHtml(scene.sceneStartedAt || "Not started yet")}</div>
     `;
 
   if (dom.sceneContext) {
@@ -354,7 +354,7 @@ function renderLocationList() {
 
   if (!settings.locations.length) {
     dom.locationList.innerHTML =
-      '<div class="stlp__empty">Noch keine Locations angelegt.</div>';
+      '<div class="stlp__empty">No locations created yet.</div>';
     return;
   }
 
@@ -371,10 +371,10 @@ function renderLocationList() {
                             <div class="stlp__location-name">${escapeHtml(location.name)}</div>
                             <div class="stlp__location-id">${escapeHtml(location.id)}</div>
                         </div>
-                        ${activeId === location.id ? '<span class="stlp__badge">Aktive Szene</span>' : ""}
+                        ${activeId === location.id ? '<span class="stlp__badge">Active Scene</span>' : ""}
                     </div>
-                    <div class="stlp__location-description">${escapeHtml(location.description || "Keine Description gesetzt.")}</div>
-                    <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "Keine")}</div>
+                    <div class="stlp__location-description">${escapeHtml(location.description || "No description set.")}</div>
+                    <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
                     <div class="stlp__location-actions">
                         <button class="menu_button stlp-edit-location" data-location-id="${escapeHtml(location.id)}">Edit</button>
                         <button class="menu_button stlp-switch-location" data-location-id="${escapeHtml(location.id)}">Start Scene</button>

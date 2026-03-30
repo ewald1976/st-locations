@@ -1,36 +1,36 @@
 # ST Location Plugin
 
-Ein minimales SillyTavern-Extension-v0 fuer statische Locations als Szenenanker.
+A minimal SillyTavern extension v0 for static locations as scene anchors.
 
-## v0 Umfang
+## v0 Scope
 
-Dieses Plugin macht nur:
+This plugin only does:
 
-- Locations anzeigen
-- Locations erstellen, bearbeiten und loeschen
-- NPCs pro Location zuweisen
-- aktive Location pro Chat als Szenen-Metadaten setzen
-- den aktiven Location-Kontext im UI sichtbar machen
+- show locations
+- create, edit, and delete locations
+- assign NPCs per location
+- set the active location as chat-specific scene metadata
+- show the active location context in the UI
 
-Bewusst nicht Teil von v0:
+Deliberately not part of v0:
 
-- keine automatische Prompt-Logik
-- kein Lore-Management
-- kein Memory-System
-- keine Events, Quests oder Story-Engine
-- keine dynamischen Locations
-- keine RPG-Mechaniken
+- no automatic prompt logic
+- no lore management
+- no memory system
+- no events, quests, or story engine
+- no dynamic locations
+- no RPG mechanics
 
-## Datenmodell
+## Data Model
 
-Jede Location speichert:
+Each location stores:
 
 - `id`
 - `name`
 - `description`
 - `npcs`
 
-Die aktive Szene wird chat-spezifisch in den Chat-Metadaten gehalten:
+The active scene is stored per chat in chat metadata:
 
 - `currentLocationId`
 - `sceneStartedAt`
@@ -39,18 +39,18 @@ Die aktive Szene wird chat-spezifisch in den Chat-Metadaten gehalten:
 
 ## Installation
 
-1. Diesen Ordner nach `SillyTavern/data/default-user/extensions/third-party/st-locations` kopieren.
-2. SillyTavern neu laden.
-3. Im Extensions-Bereich den Drawer `Location Plugin` oeffnen.
+1. Copy this folder to `SillyTavern/data/default-user/extensions/third-party/st-locations`.
+2. Reload SillyTavern.
+3. Open the `Location Plugin` drawer in the Extensions panel.
 
-## Nutzung
+## Usage
 
-1. Name und Description eintragen.
-2. NPCs aus vorhandenen Character Cards auswaehlen.
-3. `Save` klicken.
-4. In der Liste `Start Scene` klicken, um die aktive Location fuer den aktuellen Chat zu setzen.
-5. Die aktive Description erscheint oben als lesbarer Szenen-Kontext.
+1. Enter a location name and description.
+2. Select NPCs from existing character cards.
+3. Click `Save`.
+4. Click `Start Scene` in the list to set the active location for the current chat.
+5. The active description appears above as readable scene context.
 
-## Hinweis zu v0
+## v0 Note
 
-Das Plugin setzt bewusst nur strukturierte Szenen-Metadaten und zeigt den aktiven Kontext an. Es injiziert keine Prompts und veraendert keine Gruppen- oder Chatlogik automatisch.
+This plugin only stores structured scene metadata and shows the active context. It does not inject prompts and does not automatically modify group or chat logic.
