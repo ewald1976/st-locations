@@ -1,0 +1,52 @@
+<div id="st-location-plugin" class="stlp">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Location Plugin</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <div class="stlp__section">
+                <div class="stlp__section-head">
+                    <strong>Aktive Szene</strong>
+                </div>
+                <div id="stlp-active-scene" class="stlp__active-scene"></div>
+            </div>
+
+            <div class="stlp__section">
+                <div class="stlp__section-head">
+                    <strong>Location Editor</strong>
+                </div>
+                <div class="stlp__form">
+                    <input id="stlp-location-id" type="hidden" />
+
+                    <label class="stlp__label" for="stlp-location-name">Location Name</label>
+                    <input id="stlp-location-name" class="text_pole" type="text" placeholder="Wirtshaus" />
+
+                    <label class="stlp__label" for="stlp-location-description">Description</label>
+                    <textarea
+                        id="stlp-location-description"
+                        class="text_pole"
+                        rows="4"
+                        placeholder="Ein warmes, lautes Wirtshaus mit viel Gespräch und Biergeruch."
+                    ></textarea>
+
+                    <div class="stlp__label">NPCs auswählen</div>
+                    <div id="stlp-npc-list" class="stlp__npc-list"></div>
+
+                    <div class="stlp__actions">
+                        <button id="stlp-save-location" class="menu_button">Save</button>
+                        <button id="stlp-reset-form" class="menu_button menu_button_secondary">Reset</button>
+                        <button id="stlp-delete-location" class="menu_button menu_button_danger">Delete</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stlp__section">
+                <div class="stlp__section-head">
+                    <strong>Locations</strong>
+                </div>
+                <div id="stlp-location-list" class="stlp__location-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
