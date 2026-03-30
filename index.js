@@ -9,6 +9,7 @@ const DEFAULT_SCENE = Object.freeze({
   sceneStartedAt: null,
   sceneCounter: 0,
   locationSnapshot: null,
+  selectedNpcId: null,
 });
 
 const CHAT_MODE = Object.freeze({
@@ -211,6 +212,19 @@ function findLocation(locationId) {
   );
 }
 
+function getCharacterNameById(characterId) {
+  return (
+    getCharacterOptions().find((character) => character.id === characterId)?.name ||
+    null
+  );
+}
+
+function getLocationNpcOptions(location) {
+  return getCharacterOptions().filter((character) =>
+    location.npcs.includes(character.id),
+  );
+}
+
 function getCheckedNpcIds(container) {
   if (!container) {
     return [];
@@ -387,6 +401,46 @@ async function deleteLocationById(locationId) {
   toastr.success("Location deleted.");
 }
 
+async function openNpcSelectDialog(location) {
+  const context = getContext();
+  const npcOptions = getLocationNpcOptions(location);
+
+  if (!npcOptions.length) {
+    toastr.warning("No NPCs are available for this location.");
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "stlp__select-dialog";
+  wrapper.innerHTML = `
+        <div class="stlp__section-head"><strong>${escapeHtml(location.name)}</strong></div>
+        <div class="stlp__meta">Choose who to start this scene with.</div>
+        <label class="stlp__label" for="stlp-select-scene-npc">NPC</label>
+        <select id="stlp-select-scene-npc" class="text_pole stlp__select-input">
+            ${npcOptions
+              .map(
+                (npc, index) => `
+                    <option value="${escapeHtml(npc.id)}" ${index === 0 ? "selected" : ""}>${escapeHtml(npc.name)}</option>
+                `,
+              )
+              .join("")}
+        </select>
+    `;
+
+  const select = wrapper.querySelector("#stlp-select-scene-npc");
+  const popup = new context.Popup(wrapper, context.POPUP_TYPE.CONFIRM, null, {
+    okButton: "Start Scene",
+    cancelButton: "Cancel",
+  });
+  const result = await popup.show();
+
+  if (result !== context.POPUP_RESULT.AFFIRMATIVE) {
+    return null;
+  }
+
+  return select.value || null;
+}
+
 async function switchLocation(locationId) {
   const location = findLocation(locationId);
   if (!location) {
@@ -394,11 +448,24 @@ async function switchLocation(locationId) {
     return;
   }
 
+  let selectedNpcId = null;
+  if (location.chat_mode === CHAT_MODE.DIRECT) {
+    selectedNpcId = location.primary_npc;
+  }
+
+  if (location.chat_mode === CHAT_MODE.SELECT) {
+    selectedNpcId = await openNpcSelectDialog(location);
+    if (!selectedNpcId) {
+      return;
+    }
+  }
+
   const scene = getSceneState();
   scene.currentLocationId = location.id;
   scene.sceneStartedAt = new Date().toISOString();
   scene.sceneCounter = Number(scene.sceneCounter || 0) + 1;
   scene.locationSnapshot = structuredClone(location);
+  scene.selectedNpcId = selectedNpcId;
 
   await persistMetadata();
   render();
@@ -434,6 +501,7 @@ function renderActiveScene() {
   const primaryNpcName =
     getCharacterOptions().find((option) => option.id === location.primary_npc)
       ?.name || "None";
+  const selectedNpcName = getCharacterNameById(scene.selectedNpcId) || "None";
 
   dom.activeScene.classList.remove("is-empty");
   dom.activeScene.innerHTML = `
@@ -442,6 +510,7 @@ function renderActiveScene() {
         <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
         <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
         ${location.chat_mode === CHAT_MODE.DIRECT ? `<div class="stlp__meta">Primary NPC: ${escapeHtml(primaryNpcName)}</div>` : ""}
+        ${location.chat_mode === CHAT_MODE.SELECT ? `<div class="stlp__meta">Selected NPC: ${escapeHtml(selectedNpcName)}</div>` : ""}
         <div class="stlp__meta">Scene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
         <div class="stlp__meta">Scene started: ${escapeHtml(scene.sceneStartedAt || "Not started yet")}</div>
     `;

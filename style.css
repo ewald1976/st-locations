@@ -36,6 +36,16 @@
     min-width: min(960px, 90vw);
 }
 
+.stlp__select-dialog {
+    display: grid;
+    gap: 10px;
+    min-width: min(420px, 80vw);
+}
+
+.stlp__select-input {
+    width: 100%;
+}
+
 .stlp__popup-grid {
     display: grid;
     grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
