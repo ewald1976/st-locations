@@ -1173,31 +1173,24 @@ function renderManagePopup() {
   } else {
     popupState.list.innerHTML = settings.locations
       .map((location) => {
-        const npcNames = characters
-          .filter((character) => location.npcs.includes(character.id))
-          .map((character) => character.name);
-        const modeLabel =
-          location.chat_mode === CHAT_MODE.DIRECT
-            ? "Direct"
-            : location.chat_mode === CHAT_MODE.GROUP
-              ? "Group"
-              : "Select";
-
         return `
                 <div class="stlp__popup-location ${editingId === location.id ? "is-selected" : ""}">
                     <div class="stlp__popup-location-row">
                         <div class="stlp__popup-location-summary">
                             <div class="stlp__location-name">${escapeHtml(location.name)}</div>
-                            <div class="stlp__popup-location-meta">
-                                <span class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</span>
-                                <span class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</span>
+                            <div class="stlp__popup-location-state">
+                                ${activeId === location.id ? '<span class="stlp__badge">Active</span>' : ""}
+                                ${editingId === location.id ? '<span class="stlp__meta">Editing</span>' : ""}
                             </div>
                         </div>
-                        ${activeId === location.id ? '<span class="stlp__badge">Active</span>' : ""}
-                    </div>
-                    <div class="stlp__location-actions">
-                        <button type="button" class="menu_button stlp-popup-edit" data-location-id="${escapeHtml(location.id)}">Edit</button>
-                        <button type="button" class="menu_button menu_button_danger stlp-popup-delete" data-location-id="${escapeHtml(location.id)}">Remove</button>
+                        <div class="stlp__location-actions stlp__popup-location-actions">
+                            <button type="button" class="menu_button stlp-popup-edit stlp__icon-button" data-location-id="${escapeHtml(location.id)}" title="Edit location" aria-label="Edit location">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button type="button" class="menu_button menu_button_danger stlp-popup-delete stlp__icon-button" data-location-id="${escapeHtml(location.id)}" title="Delete location" aria-label="Delete location">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;

@@ -74,16 +74,15 @@
 
 .stlp__popup-list {
     display: grid;
-    gap: 8px;
+    gap: 6px;
     max-height: min(65vh, 720px);
     overflow-y: auto;
     padding-right: 4px;
 }
 
 .stlp__popup-location {
-    display: grid;
-    gap: 8px;
-    padding: 12px;
+    display: block;
+    padding: 10px 12px;
     border: 1px solid var(--stlp-border);
     border-radius: 10px;
     background: color-mix(in srgb, var(--stlp-surface) 60%, transparent);
@@ -96,28 +95,35 @@
 
 .stlp__popup-location-row {
     display: flex;
-    align-items: start;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
 }
 
 .stlp__popup-location-summary {
     display: grid;
-    gap: 6px;
-    min-width: 0;
-}
-
-.stlp__popup-location-meta {
-    display: grid;
     gap: 4px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
-.stlp__popup-sidebar .stlp__location-actions {
+.stlp__popup-location-state {
+    display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
 }
 
-.stlp__popup-sidebar .stlp__location-actions .menu_button {
-    min-width: 88px;
+.stlp__popup-location-actions {
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.stlp__icon-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0;
     justify-content: center;
 }
 
