@@ -11,6 +11,7 @@ const DEFAULT_SCENE = Object.freeze({
   sceneCounter: 0,
   locationSnapshot: null,
   selectedNpcId: null,
+  selectedNpcIds: [],
 });
 
 const CHAT_MODE = Object.freeze({
@@ -233,6 +234,14 @@ function getLocationNpcOptions(location) {
   );
 }
 
+function normalizeNpcIds(npcIds) {
+  return [...new Set((Array.isArray(npcIds) ? npcIds : []).map(String).filter(Boolean))].sort();
+}
+
+function buildNpcSelectionKey(npcIds) {
+  return normalizeNpcIds(npcIds).join("|");
+}
+
 function normalizeSceneChat(record) {
   if (!record || typeof record !== "object") {
     return null;
@@ -257,6 +266,10 @@ function normalizeSceneChat(record) {
 
   if (typeof record.mode === "string") {
     normalized.mode = record.mode;
+  }
+
+  if (Array.isArray(record.npcIds)) {
+    normalized.npcIds = normalizeNpcIds(record.npcIds);
   }
 
   return normalized;
@@ -297,26 +310,33 @@ function upsertSceneChatRecord(locationId, npcId, chatFile) {
   }
 }
 
-function findGroupSceneRecord(locationId) {
+function findGroupSceneRecordByNpcIds(locationId, npcIds) {
+  const npcKey = buildNpcSelectionKey(npcIds);
   return (
     getSceneChatRecords().find(
       (record) =>
-        record.locationId === locationId && record.mode === CHAT_MODE.GROUP,
+        record.locationId === locationId &&
+        record.mode === CHAT_MODE.GROUP &&
+        buildNpcSelectionKey(record.npcIds || []) === npcKey,
     ) || null
   );
 }
 
-function upsertGroupSceneRecord(locationId, groupId, chatFile) {
+function upsertGroupSceneRecord(locationId, groupId, chatFile, npcIds = []) {
   const records = getSceneChatRecords();
+  const npcKey = buildNpcSelectionKey(npcIds);
   const existingIndex = records.findIndex(
     (record) =>
-      record.locationId === locationId && record.mode === CHAT_MODE.GROUP,
+      record.locationId === locationId &&
+      record.mode === CHAT_MODE.GROUP &&
+      buildNpcSelectionKey(record.npcIds || []) === npcKey,
   );
   const nextRecord = {
     locationId,
     mode: CHAT_MODE.GROUP,
     groupId,
     chatFile,
+    npcIds: normalizeNpcIds(npcIds),
   };
 
   if (existingIndex >= 0) {
@@ -398,8 +418,8 @@ async function refreshContextGroups() {
   return context.groups;
 }
 
-function getGroupMemberAvatars(location) {
-  return location.npcs
+function getGroupMemberAvatars(npcIds) {
+  return npcIds
     .map((npcId) => {
       const characterIndex = findCharacterIndexByNpcId(npcId);
       return characterIndex >= 0
@@ -409,14 +429,20 @@ function getGroupMemberAvatars(location) {
     .filter(Boolean);
 }
 
-function buildSceneGroupName(location) {
-  return `Location: ${location.name}`;
+function buildSceneGroupName(location, npcIds) {
+  const npcNames = normalizeNpcIds(npcIds)
+    .map((npcId) => getCharacterNameById(npcId))
+    .filter(Boolean);
+
+  return npcNames.length
+    ? `Location: ${location.name} - ${npcNames.join(", ")}`
+    : `Location: ${location.name}`;
 }
 
-async function getOrCreateSceneGroup(location) {
+async function getOrCreateSceneGroup(location, npcIds) {
   await refreshContextGroups();
 
-  const existingRecord = findGroupSceneRecord(location.id);
+  const existingRecord = findGroupSceneRecordByNpcIds(location.id, npcIds);
   if (existingRecord?.groupId) {
     const existingGroup = getContext().groups.find(
       (group) => group.id === existingRecord.groupId,
@@ -426,10 +452,10 @@ async function getOrCreateSceneGroup(location) {
     }
   }
 
-  const memberAvatars = [...new Set(getGroupMemberAvatars(location))];
+  const memberAvatars = [...new Set(getGroupMemberAvatars(npcIds))];
   const chatName = getContext().humanizedDateTime();
   const groupModel = {
-    name: buildSceneGroupName(location),
+    name: buildSceneGroupName(location, npcIds),
     members: memberAvatars,
     avatar_url: "",
     allow_self_responses: false,
@@ -480,9 +506,9 @@ async function createGroupSceneChat(group) {
   return newChatName;
 }
 
-async function chooseGroupSceneChat(location, group) {
+async function chooseGroupSceneChat(location, group, npcIds) {
   const context = getContext();
-  const existingRecord = findGroupSceneRecord(location.id);
+  const existingRecord = findGroupSceneRecordByNpcIds(location.id, npcIds);
 
   if (!existingRecord?.chatFile || !group.chats.includes(existingRecord.chatFile)) {
     return {
@@ -526,15 +552,16 @@ async function chooseGroupSceneChat(location, group) {
   };
 }
 
-async function openGroupScene(location) {
+async function openGroupScene(location, npcIds = location.npcs) {
   const context = getContext();
-  const group = await getOrCreateSceneGroup(location);
+  const normalizedNpcIds = normalizeNpcIds(npcIds);
+  const group = await getOrCreateSceneGroup(location, normalizedNpcIds);
 
   if (!group) {
     return false;
   }
 
-  const target = await chooseGroupSceneChat(location, group);
+  const target = await chooseGroupSceneChat(location, group, normalizedNpcIds);
   if (!target?.chatFile) {
     return false;
   }
@@ -545,7 +572,7 @@ async function openGroupScene(location) {
   );
   await context.openGroupChat(group.id, target.chatFile);
 
-  upsertGroupSceneRecord(location.id, group.id, target.chatFile);
+  upsertGroupSceneRecord(location.id, group.id, target.chatFile, normalizedNpcIds);
   await persistSettings();
 
   return true;
@@ -827,20 +854,21 @@ async function openNpcSelectDialog(location) {
   wrapper.className = "stlp__select-dialog";
   wrapper.innerHTML = `
         <div class="stlp__section-head"><strong>${escapeHtml(location.name)}</strong></div>
-        <div class="stlp__meta">Choose who to start this scene with.</div>
-        <label class="stlp__label" for="stlp-select-scene-npc">NPC</label>
-        <select id="stlp-select-scene-npc" class="text_pole stlp__select-input">
+        <div class="stlp__meta">Choose who should participate in this scene.</div>
+        <div class="stlp__npc-list stlp__select-npc-list">
             ${npcOptions
               .map(
                 (npc, index) => `
-                    <option value="${escapeHtml(npc.id)}" ${index === 0 ? "selected" : ""}>${escapeHtml(npc.name)}</option>
+                    <label class="stlp__npc-item">
+                        <input type="checkbox" value="${escapeHtml(npc.id)}" ${index === 0 ? "checked" : ""} />
+                        <span>${escapeHtml(npc.name)}</span>
+                    </label>
                 `,
               )
               .join("")}
-        </select>
+        </div>
     `;
 
-  const select = wrapper.querySelector("#stlp-select-scene-npc");
   const popup = new context.Popup(wrapper, context.POPUP_TYPE.CONFIRM, null, {
     okButton: "Start Scene",
     cancelButton: "Cancel",
@@ -851,7 +879,7 @@ async function openNpcSelectDialog(location) {
     return null;
   }
 
-  return select.value || null;
+  return getCheckedNpcIds(wrapper.querySelector(".stlp__select-npc-list"));
 }
 
 async function switchLocation(locationId) {
@@ -862,20 +890,25 @@ async function switchLocation(locationId) {
   }
 
   let selectedNpcId = null;
+  let selectedNpcIds = [];
   if (location.chat_mode === CHAT_MODE.DIRECT) {
     selectedNpcId = location.primary_npc;
+    selectedNpcIds = selectedNpcId ? [selectedNpcId] : [];
   }
 
   if (location.chat_mode === CHAT_MODE.SELECT) {
-    selectedNpcId = await openNpcSelectDialog(location);
-    if (!selectedNpcId) {
+    selectedNpcIds = await openNpcSelectDialog(location);
+    if (!selectedNpcIds?.length) {
+      toastr.warning("Select at least one NPC to start the scene.");
       return;
     }
+
+    selectedNpcId = selectedNpcIds.length === 1 ? selectedNpcIds[0] : null;
   }
 
   if (
     location.chat_mode === CHAT_MODE.DIRECT ||
-    location.chat_mode === CHAT_MODE.SELECT
+    (location.chat_mode === CHAT_MODE.SELECT && selectedNpcIds.length === 1)
   ) {
     const opened = await openDirectScene(location, selectedNpcId);
     if (!opened) {
@@ -883,8 +916,14 @@ async function switchLocation(locationId) {
     }
   }
 
-  if (location.chat_mode === CHAT_MODE.GROUP) {
-    const opened = await openGroupScene(location);
+  if (
+    location.chat_mode === CHAT_MODE.GROUP ||
+    (location.chat_mode === CHAT_MODE.SELECT && selectedNpcIds.length > 1)
+  ) {
+    const opened = await openGroupScene(
+      location,
+      location.chat_mode === CHAT_MODE.GROUP ? location.npcs : selectedNpcIds,
+    );
     if (!opened) {
       return;
     }
@@ -896,6 +935,7 @@ async function switchLocation(locationId) {
   scene.sceneCounter = Number(scene.sceneCounter || 0) + 1;
   scene.locationSnapshot = structuredClone(location);
   scene.selectedNpcId = selectedNpcId;
+  scene.selectedNpcIds = selectedNpcIds;
 
   await persistMetadata();
   render();
@@ -932,6 +972,10 @@ function renderActiveScene() {
     getCharacterOptions().find((option) => option.id === location.primary_npc)
       ?.name || "None";
   const selectedNpcName = getCharacterNameById(scene.selectedNpcId) || "None";
+  const selectedNpcIds = normalizeNpcIds(scene.selectedNpcIds || []);
+  const selectedNpcNames = selectedNpcIds
+    .map((npcId) => getCharacterNameById(npcId))
+    .filter(Boolean);
 
   dom.activeScene.classList.remove("is-empty");
   dom.activeScene.innerHTML = `
@@ -940,7 +984,8 @@ function renderActiveScene() {
         <div class="stlp__meta">NPCs: ${escapeHtml(npcNames.join(", ") || "None")}</div>
         <div class="stlp__meta">Interaction: ${escapeHtml(modeLabel)}</div>
         ${location.chat_mode === CHAT_MODE.DIRECT ? `<div class="stlp__meta">Primary NPC: ${escapeHtml(primaryNpcName)}</div>` : ""}
-        ${location.chat_mode === CHAT_MODE.SELECT ? `<div class="stlp__meta">Selected NPC: ${escapeHtml(selectedNpcName)}</div>` : ""}
+        ${location.chat_mode === CHAT_MODE.SELECT && selectedNpcIds.length === 1 ? `<div class="stlp__meta">Selected NPC: ${escapeHtml(selectedNpcName)}</div>` : ""}
+        ${location.chat_mode === CHAT_MODE.SELECT && selectedNpcIds.length > 1 ? `<div class="stlp__meta">Selected Participants: ${escapeHtml(selectedNpcNames.join(", ") || "None")}</div>` : ""}
         <div class="stlp__meta">Scene #: ${escapeHtml(scene.sceneCounter || 0)}</div>
         <div class="stlp__meta">Scene started: ${escapeHtml(scene.sceneStartedAt || "Not started yet")}</div>
     `;
